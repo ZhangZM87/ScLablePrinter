@@ -24,6 +24,7 @@
                         <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddBoxElementCommand}" Content="矩形框" />
                         <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddLineElementCommand}" Content="线条" />
                         <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddEraseElementCommand}" Content="挖空" />
+                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddTableElementCommand}" Content="表格" />
                     </WrapPanel>
 
                     <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionTitleTextStyle}" Text="元素列表" />
@@ -60,7 +61,8 @@
                                           SelectedElementId="{Binding SelectedElementId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                           ElementSelectedCommand="{Binding SelectElementByIdCommand}"
                                           ElementDragStartedCommand="{Binding BeginSelectedElementMoveCommand}"
-                                          ElementMovedCommand="{Binding MoveSelectedElementCommand}" />
+                                          ElementMovedCommand="{Binding MoveSelectedElementCommand}"
+                                          TableCellContextMenuCommand="{Binding TableCellContextMenuCommand}" />
                 </Grid>
             </Border>
 
@@ -170,6 +172,62 @@
                                     <TextBox Text="{Binding DataContext.SelectedEraseWidth, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="高度" />
                                     <TextBox Text="{Binding DataContext.SelectedEraseHeight, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </DataTemplate>
+                            <DataTemplate DataType="{x:Type models:TableElement}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="行高" />
+                                    <TextBox Text="{Binding DataContext.SelectedTableRowHeight, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="列宽 A" />
+                                    <TextBox Text="{Binding DataContext.SelectedTableColumnWidthA, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="列宽 B" />
+                                    <TextBox Text="{Binding DataContext.SelectedTableColumnWidthB, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+
+                                    <TextBlock Margin="0,8,0,0" Style="{StaticResource SectionTitleTextStyle}" Text="单元格内容" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <StackPanel Width="160">
+                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="(1,1) 类型" />
+                                            <ComboBox SelectedValue="{Binding DataContext.SelectedTableCell11Type, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
+                                                <ComboBoxItem Content="文本" Tag="{x:Static models:TableCellContentType.Text}" />
+                                                <ComboBoxItem Content="条码" Tag="{x:Static models:TableCellContentType.Barcode}" />
+                                                <ComboBoxItem Content="二维码" Tag="{x:Static models:TableCellContentType.QrCode}" />
+                                            </ComboBox>
+                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="内容" />
+                                            <TextBox Text="{Binding DataContext.SelectedTableCell11Content, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Width="160" Margin="12,0,0,0">
+                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="(1,2) 类型" />
+                                            <ComboBox SelectedValue="{Binding DataContext.SelectedTableCell12Type, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
+                                                <ComboBoxItem Content="文本" Tag="{x:Static models:TableCellContentType.Text}" />
+                                                <ComboBoxItem Content="条码" Tag="{x:Static models:TableCellContentType.Barcode}" />
+                                                <ComboBoxItem Content="二维码" Tag="{x:Static models:TableCellContentType.QrCode}" />
+                                            </ComboBox>
+                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="内容" />
+                                            <TextBox Text="{Binding DataContext.SelectedTableCell12Content, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <StackPanel Width="160">
+                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="(2,1) 类型" />
+                                            <ComboBox SelectedValue="{Binding DataContext.SelectedTableCell21Type, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
+                                                <ComboBoxItem Content="文本" Tag="{x:Static models:TableCellContentType.Text}" />
+                                                <ComboBoxItem Content="条码" Tag="{x:Static models:TableCellContentType.Barcode}" />
+                                                <ComboBoxItem Content="二维码" Tag="{x:Static models:TableCellContentType.QrCode}" />
+                                            </ComboBox>
+                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="内容" />
+                                            <TextBox Text="{Binding DataContext.SelectedTableCell21Content, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Width="160" Margin="12,0,0,0">
+                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="(2,2) 类型" />
+                                            <ComboBox SelectedValue="{Binding DataContext.SelectedTableCell22Type, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
+                                                <ComboBoxItem Content="文本" Tag="{x:Static models:TableCellContentType.Text}" />
+                                                <ComboBoxItem Content="条码" Tag="{x:Static models:TableCellContentType.Barcode}" />
+                                                <ComboBoxItem Content="二维码" Tag="{x:Static models:TableCellContentType.QrCode}" />
+                                            </ComboBox>
+                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="内容" />
+                                            <TextBox Text="{Binding DataContext.SelectedTableCell22Content, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </StackPanel>
                                 </StackPanel>
                             </DataTemplate>
                         </ContentControl.Resources>

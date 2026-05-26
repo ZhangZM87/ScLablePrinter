@@ -63,14 +63,14 @@ public partial class App : Application
 		services.AddSingleton<IElementTsplWriter, BoxElementTsplWriter>();
 		services.AddSingleton<IElementTsplWriter, LineElementTsplWriter>();
 		services.AddSingleton<IElementTsplWriter, EraseElementTsplWriter>();
-
-		services.AddSingleton<LabelTemplateSerializer>();
+        services.AddSingleton<IElementTsplWriter, TableElementTsplWriter>();
 		services.AddSingleton<TsplGenerator>();
 		services.AddSingleton<PrintDataChunker>();
 		services.AddSingleton<PrinterStatusInterpreter>();
 
 		services.AddSingleton<UsbInterop>();
 		services.AddSingleton<IPrinterService, UsbPrinterService>();
+		services.AddSingleton<LabelTemplateSerializer>();
 		services.AddSingleton<ILabelTemplateStorageService, LabelTemplateStorageService>();
 		services.AddSingleton<IPrintFileService, PrintFileService>();
 

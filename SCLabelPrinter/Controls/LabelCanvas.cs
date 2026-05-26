@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -26,6 +27,13 @@ public sealed class LabelCanvas : FrameworkElement
     private readonly Pen _selectionPen = new(new SolidColorBrush(Color.FromRgb(0x1D, 0x4E, 0x8E)), 1)
     {
         DashStyle = DashStyles.Dash
+    };
+    private readonly Brush _tableBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xFC, 0xFC, 0xFF));
+    private readonly Brush _tableAlternateRowBrush = new SolidColorBrush(Color.FromArgb(24, 0xEA, 0xEA, 0xF0));
+    private readonly Pen _tableBorderPen = new(new SolidColorBrush(Color.FromRgb(0x25, 0x27, 0x2E)), 1.6);
+    private readonly Pen _tableGridPen = new(new SolidColorBrush(Color.FromRgb(0x9A, 0x9E, 0xAC)), 0.7)
+    {
+        DashStyle = new DashStyle(new double[] { 2, 2 }, 0),
     };
     private string? _draggingElementId;
     private Point _dragOffset;
@@ -65,6 +73,12 @@ public sealed class LabelCanvas : FrameworkElement
         typeof(LabelCanvas),
         new FrameworkPropertyMetadata(null));
 
+    public static readonly DependencyProperty TableCellContextMenuCommandProperty = DependencyProperty.Register(
+        nameof(TableCellContextMenuCommand),
+        typeof(ICommand),
+        typeof(LabelCanvas),
+        new FrameworkPropertyMetadata(null));
+
     public LabelTemplateDocument? Template
     {
         get => (LabelTemplateDocument?)GetValue(TemplateProperty);
@@ -93,6 +107,12 @@ public sealed class LabelCanvas : FrameworkElement
     {
         get => (ICommand?)GetValue(ElementMovedCommandProperty);
         set => SetValue(ElementMovedCommandProperty, value);
+    }
+
+    public ICommand? TableCellContextMenuCommand
+    {
+        get => (ICommand?)GetValue(TableCellContextMenuCommandProperty);
+        set => SetValue(TableCellContextMenuCommandProperty, value);
     }
 
     /// <summary>
@@ -161,6 +181,117 @@ public sealed class LabelCanvas : FrameworkElement
         //}
 
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// 鼠标右键单击时显示表格单元格上下文菜单。
+    /// </summary>
+    protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
+    {
+        base.OnMouseRightButtonDown(e);
+
+        if (Template is null)
+        {
+            return;
+        }
+
+        var mousePoint = e.GetPosition(this);
+        var surface = CreateSurfaceRect();
+        var (scale, origin) = CalculateScale(surface, Template.Label);
+        var hitElement = Template.Elements.AsEnumerable().Reverse().FirstOrDefault(el => IsPointOverElement(el, mousePoint, scale, origin));
+        if (hitElement is not TableElement tableElement)
+        {
+            return;
+        }
+
+        var cell = GetTableCellFromPoint(tableElement, mousePoint, scale, origin);
+        if (cell is null)
+        {
+            return;
+        }
+
+        SelectedElementId = tableElement.Id;
+        var contextMenu = new ContextMenu();
+        contextMenu.PlacementTarget = this;
+        contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+
+        contextMenu.Items.Add(CreateMenuItem("添加当前行上方", TableCellContextMenuAction.AddRowAbove, tableElement, cell.Value.Row, cell.Value.Column));
+        contextMenu.Items.Add(CreateMenuItem("添加当前行下方", TableCellContextMenuAction.AddRowBelow, tableElement, cell.Value.Row, cell.Value.Column));
+        var removeRowItem = CreateMenuItem("删除当前行", TableCellContextMenuAction.RemoveRow, tableElement, cell.Value.Row, cell.Value.Column);
+        removeRowItem.IsEnabled = tableElement.Rows > 1;
+        contextMenu.Items.Add(removeRowItem);
+        contextMenu.Items.Add(new Separator());
+        contextMenu.Items.Add(CreateMenuItem("添加当前列左侧", TableCellContextMenuAction.AddColumnLeft, tableElement, cell.Value.Row, cell.Value.Column));
+        contextMenu.Items.Add(CreateMenuItem("添加当前列右侧", TableCellContextMenuAction.AddColumnRight, tableElement, cell.Value.Row, cell.Value.Column));
+        var removeColumnItem = CreateMenuItem("删除当前列", TableCellContextMenuAction.RemoveColumn, tableElement, cell.Value.Row, cell.Value.Column);
+        removeColumnItem.IsEnabled = tableElement.Cols > 1;
+        contextMenu.Items.Add(removeColumnItem);
+        contextMenu.Items.Add(new Separator());
+        contextMenu.Items.Add(CreateMenuItem("编辑当前单元格", TableCellContextMenuAction.EditCell, tableElement, cell.Value.Row, cell.Value.Column));
+
+        contextMenu.IsOpen = true;
+
+        e.Handled = true;
+    }
+
+    private MenuItem CreateMenuItem(string header, TableCellContextMenuAction action, TableElement table, int row, int column)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) =>
+        {
+            var command = TableCellContextMenuCommand;
+            if (command is not null)
+            {
+                var request = new TableCellContextMenuRequest
+                {
+                    TableElementId = table.Id,
+                    Row = row,
+                    Column = column,
+                    Action = action,
+                };
+                if (command.CanExecute(request))
+                {
+                    command.Execute(request);
+                }
+            }
+        };
+
+        return item;
+    }
+
+    private static (int Row, int Column)? GetTableCellFromPoint(TableElement table, Point point, double scale, Point origin)
+    {
+        var left = origin.X + table.X * scale;
+        var top = origin.Y + table.Y * scale;
+        var totalWidth = table.ColumnWidths.Sum() * scale;
+        var totalHeight = table.Rows * table.RowHeight * scale;
+        var localX = point.X - left;
+        var localY = point.Y - top;
+
+        if (localX < 0 || localY < 0 || localX > totalWidth || localY > totalHeight)
+        {
+            return null;
+        }
+
+        var row = Math.Min(table.Rows - 1, (int)(localY / (table.RowHeight * scale)));
+        var column = 0;
+        var accumulated = 0.0;
+        foreach (var width in table.ColumnWidths)
+        {
+            accumulated += width * scale;
+            if (localX <= accumulated)
+            {
+                break;
+            }
+            column++;
+        }
+
+        if (column < 0 || column >= table.Cols)
+        {
+            return null;
+        }
+
+        return (row, column);
     }
 
     /// <summary>
@@ -300,6 +431,9 @@ public sealed class LabelCanvas : FrameworkElement
             case EraseElement eraseElement:
                 DrawEraseElement(drawingContext, eraseElement, scale, origin);
                 break;
+            case TableElement tableElement:
+                DrawTableElement(drawingContext, tableElement, scale, origin);
+                break;
         }
 
         if (element.Id == SelectedElementId)
@@ -337,6 +471,7 @@ public sealed class LabelCanvas : FrameworkElement
             BoxElement boxElement => GetBoxBounds(boxElement, scale, origin),
             LineElement lineElement => new Rect(origin.X + lineElement.X * scale, origin.Y + lineElement.Y * scale, Math.Max(1, lineElement.Width * scale), Math.Max(1, lineElement.Height * scale)),
             EraseElement eraseElement => new Rect(origin.X + eraseElement.X * scale, origin.Y + eraseElement.Y * scale, Math.Max(1, eraseElement.Width * scale), Math.Max(1, eraseElement.Height * scale)),
+            TableElement tableElement => new Rect(origin.X + tableElement.X * scale, origin.Y + tableElement.Y * scale, Math.Max(1, tableElement.TotalWidth * scale), Math.Max(1, tableElement.Rows * tableElement.RowHeight * scale)),
             _ => new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, 1, 1),
         };
     }
@@ -510,6 +645,109 @@ public sealed class LabelCanvas : FrameworkElement
         {
             drawingContext.DrawRectangle(_eraseBrush, null, rect);
         });
+    }
+
+    /// <summary>
+    /// 绘制表格元素预览。
+    /// </summary>
+    private void DrawTableElement(DrawingContext drawingContext, TableElement element, double scale, Point origin)
+    {
+        var left = origin.X + element.X * scale;
+        var top = origin.Y + element.Y * scale;
+        var rowHeight = element.RowHeight * scale;
+        var totalWidth = Math.Max(1, element.ColumnWidths.Sum() * scale);
+        var totalHeight = Math.Max(1, element.Rows * rowHeight);
+        var tableRect = new Rect(left, top, totalWidth, totalHeight);
+
+        drawingContext.DrawRoundedRectangle(_tableBackgroundBrush, _tableBorderPen, tableRect, 4, 4);
+
+        for (var rowIndex = 0; rowIndex < element.Rows; rowIndex++)
+        {
+            if (rowIndex % 2 == 1)
+            {
+                var rowRect = new Rect(left, top + rowIndex * rowHeight, totalWidth, rowHeight);
+                drawingContext.DrawRectangle(_tableAlternateRowBrush, null, rowRect);
+            }
+        }
+
+        var currentX = left;
+        for (var colIndex = 1; colIndex < element.Cols; colIndex++)
+        {
+            currentX += element.GetColumnWidth(colIndex - 1) * scale;
+            drawingContext.DrawLine(_tableGridPen, new Point(currentX, top), new Point(currentX, top + totalHeight));
+        }
+
+        for (var rowIndex = 1; rowIndex < element.Rows; rowIndex++)
+        {
+            var y = top + rowIndex * rowHeight;
+            drawingContext.DrawLine(_tableGridPen, new Point(left, y), new Point(left + totalWidth, y));
+        }
+
+        for (var rowIndex = 0; rowIndex < element.Rows; rowIndex++)
+        {
+            for (var colIndex = 0; colIndex < element.Cols; colIndex++)
+            {
+                var cellIndex = rowIndex * element.Cols + colIndex;
+                if (cellIndex >= element.Cells.Count)
+                {
+                    continue;
+                }
+
+                var cell = element.Cells[cellIndex];
+                var cellLeft = left + element.ColumnWidths.Take(colIndex).Sum() * scale;
+                var cellTop = top + rowIndex * rowHeight;
+                var cellWidth = element.GetColumnWidth(colIndex) * scale;
+                var cellHeight = rowHeight;
+
+                switch (cell.ContentType)
+                {
+                    case TableCellContentType.Text:
+                    {
+                        var contentRect = new Rect(cellLeft + 8, cellTop + 6, Math.Max(1, cellWidth - 16), Math.Max(1, cellHeight - 12));
+                        var formattedText = new FormattedText(
+                            cell.Content,
+                            CultureInfo.CurrentUICulture,
+                            FlowDirection.LeftToRight,
+                            new Typeface("Microsoft YaHei UI"),
+                            Math.Max(10, 12 * scale),
+                            _foregroundBrush,
+                            VisualTreeHelper.GetDpi(this).PixelsPerDip)
+                        {
+                            MaxTextWidth = contentRect.Width,
+                            MaxTextHeight = contentRect.Height,
+                            TextAlignment = TextAlignment.Center,
+                        };
+                        var textX = contentRect.X + (contentRect.Width - formattedText.Width) / 2;
+                        var textY = contentRect.Y + (contentRect.Height - formattedText.Height) / 2;
+                        drawingContext.DrawText(formattedText, new Point(Math.Max(contentRect.X, textX), Math.Max(contentRect.Y, textY)));
+                        break;
+                    }
+                    case TableCellContentType.Barcode:
+                    {
+                        var availableWidth = Math.Max(1, cellWidth - 16);
+                        var availableHeight = Math.Max(1, cellHeight - 18);
+                        var desiredHeight = Math.Min(availableHeight, 48 * scale);
+                        var barcodeImage = CreateBarcodeImage(MapBarcodeFormat(cell.BarcodeType), string.IsNullOrWhiteSpace(cell.Content) ? " " : cell.Content, (int)Math.Max(1, availableWidth), (int)Math.Max(1, desiredHeight));
+                        var imageWidth = Math.Min(availableWidth, barcodeImage.PixelWidth);
+                        var imageHeight = Math.Min(availableHeight, barcodeImage.PixelHeight);
+                        var drawX = cellLeft + 8 + (availableWidth - imageWidth) / 2;
+                        var drawY = cellTop + 8 + (availableHeight - imageHeight) / 2;
+                        drawingContext.DrawImage(barcodeImage, new Rect(drawX, drawY, imageWidth, imageHeight));
+                        break;
+                    }
+                    case TableCellContentType.QrCode:
+                    {
+                        var availableSize = Math.Min(cellWidth - 16, cellHeight - 16);
+                        var qrSize = Math.Min((int)Math.Floor(availableSize), 120);
+                        var qrImage = CreateQrCodeImage(string.IsNullOrWhiteSpace(cell.Content) ? " " : cell.Content, Math.Max(1, qrSize), cell.QrErrorCorrectionLevel);
+                        var drawX = cellLeft + 8 + (cellWidth - 16 - qrSize) / 2;
+                        var drawY = cellTop + 8 + (cellHeight - 16 - qrSize) / 2;
+                        drawingContext.DrawImage(qrImage, new Rect(drawX, drawY, qrSize, qrSize));
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>

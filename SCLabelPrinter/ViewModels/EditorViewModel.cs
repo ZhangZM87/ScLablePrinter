@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Text;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SCLabelPrinter.Core.Models;
@@ -9,6 +11,7 @@ using SCLabelPrinter.Core.Printers;
 using SCLabelPrinter.Core.Serialization;
 using SCLabelPrinter.Core.Storage;
 using SCLabelPrinter.Services;
+using SCLabelPrinter.Views;
 
 namespace SCLabelPrinter.ViewModels;
 
@@ -26,7 +29,10 @@ public partial class EditorViewModel : ObservableObject
     private readonly LabelTemplateSerializer _serializer;
     private readonly Stack<string> _undoStack = new();
     private readonly Stack<string> _redoStack = new();
+    private IAsyncRelayCommand<TableCellContextMenuRequest?>? _tableCellContextMenuCommand;
     private bool _isApplyingSnapshot;
+
+    public IAsyncRelayCommand<TableCellContextMenuRequest?> TableCellContextMenuCommand => _tableCellContextMenuCommand ??= new AsyncRelayCommand<TableCellContextMenuRequest?>(HandleTableCellContextMenuAsync);
 
     /// <summary>
     /// 创建标签编辑器视图模型。
@@ -124,6 +130,39 @@ public partial class EditorViewModel : ObservableObject
 
     [ObservableProperty]
     private int selectedBoxEndX = 200;
+
+    [ObservableProperty]
+    private int selectedTableRowHeight = 100;
+
+    [ObservableProperty]
+    private int selectedTableColumnWidthA = 260;
+
+    [ObservableProperty]
+    private int selectedTableColumnWidthB = 260;
+
+    [ObservableProperty]
+    private TableCellContentType selectedTableCell11Type = TableCellContentType.Text;
+
+    [ObservableProperty]
+    private string selectedTableCell11Content = string.Empty;
+
+    [ObservableProperty]
+    private TableCellContentType selectedTableCell12Type = TableCellContentType.Text;
+
+    [ObservableProperty]
+    private string selectedTableCell12Content = string.Empty;
+
+    [ObservableProperty]
+    private TableCellContentType selectedTableCell21Type = TableCellContentType.Text;
+
+    [ObservableProperty]
+    private string selectedTableCell21Content = string.Empty;
+
+    [ObservableProperty]
+    private TableCellContentType selectedTableCell22Type = TableCellContentType.Text;
+
+    [ObservableProperty]
+    private string selectedTableCell22Content = string.Empty;
 
     [ObservableProperty]
     private int selectedBoxEndY = 120;
@@ -419,6 +458,108 @@ public partial class EditorViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 添加默认表格元素。
+    /// </summary>
+    [RelayCommand]
+    private void AddTableElement()
+    {
+        AddElement(new TableElement
+        {
+            X = 40,
+            Y = 40,
+            Rows = 2,
+            Cols = 2,
+            RowHeight = 90,
+            ColumnWidths = new List<int> { 260, 260 },
+            Cells = new List<TableCell>
+            {
+                new TableCell { ContentType = TableCellContentType.Text, Content = "标题1" },
+                new TableCell { ContentType = TableCellContentType.Text, Content = "标题2" },
+                new TableCell { ContentType = TableCellContentType.Barcode, Content = "12345678", BarcodeType = BarcodeType.Code128 },
+                new TableCell { ContentType = TableCellContentType.QrCode, Content = "https://example.com", QrCellWidth = 5, QrErrorCorrectionLevel = "M", QrMode = "A" },
+            }
+        }, "已添加表格元素");
+    }
+
+    [RelayCommand]
+    private async Task HandleTableCellContextMenuAsync(TableCellContextMenuRequest? request)
+    {
+        if (request is null)
+        {
+            return;
+        }
+
+        var tableElement = Elements.OfType<TableElement>().FirstOrDefault(e => e.Id == request.TableElementId);
+        if (tableElement is null)
+        {
+            return;
+        }
+
+        if (request.Action != TableCellContextMenuAction.EditCell)
+        {
+            CaptureUndoSnapshot();
+        }
+
+        switch (request.Action)
+        {
+            case TableCellContextMenuAction.AddRowAbove:
+                tableElement.InsertRowAt(request.Row);
+                break;
+            case TableCellContextMenuAction.AddRowBelow:
+                tableElement.InsertRowAt(request.Row + 1);
+                break;
+            case TableCellContextMenuAction.AddColumnLeft:
+                tableElement.InsertColumnAt(request.Column);
+                break;
+            case TableCellContextMenuAction.AddColumnRight:
+                tableElement.InsertColumnAt(request.Column + 1);
+                break;
+            case TableCellContextMenuAction.RemoveRow:
+                tableElement.RemoveRowAt(request.Row);
+                break;
+            case TableCellContextMenuAction.RemoveColumn:
+                tableElement.RemoveColumnAt(request.Column);
+                break;
+            case TableCellContextMenuAction.EditCell:
+                await EditTableCellAsync(tableElement, request.Row, request.Column);
+                return;
+            default:
+                return;
+        }
+
+        tableElement.EnsureCellCount();
+        RefreshPreview();
+        _statusCenter.SetActivityMessage("表格已更新");
+    }
+
+    private async Task EditTableCellAsync(TableElement tableElement, int row, int column)
+    {
+        if (row < 0 || row >= tableElement.Rows || column < 0 || column >= tableElement.Cols)
+        {
+            return;
+        }
+
+        tableElement.EnsureCellCount();
+        var cellIndex = row * tableElement.Cols + column;
+        var cell = tableElement.Cells[cellIndex];
+
+        var editor = new TableCellEditorViewModel(cell);
+        var dialog = new TableCellEditorWindow
+        {
+            DataContext = editor,
+            Owner = Application.Current?.MainWindow,
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            CaptureUndoSnapshot();
+            tableElement.Cells[cellIndex] = editor.BuildTableCell();
+            RefreshPreview();
+            _statusCenter.SetActivityMessage($"单元格 ({row + 1},{column + 1}) 已更新");
+        }
+    }
+
+    /// <summary>
     /// 删除当前选中的元素。
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanEditSelectedElement))]
@@ -485,6 +626,33 @@ public partial class EditorViewModel : ObservableObject
             case EraseElement eraseElement:
                 eraseElement.Width = SelectedEraseWidth;
                 eraseElement.Height = SelectedEraseHeight;
+                break;
+            case TableElement tableElement:
+                tableElement.RowHeight = SelectedTableRowHeight;
+                if (tableElement.ColumnWidths.Count == 0)
+                {
+                    tableElement.ColumnWidths.Add(SelectedTableColumnWidthA);
+                    tableElement.ColumnWidths.Add(SelectedTableColumnWidthB);
+                }
+                else
+                {
+                    tableElement.ColumnWidths[0] = SelectedTableColumnWidthA;
+                    if (tableElement.ColumnWidths.Count > 1)
+                    {
+                        tableElement.ColumnWidths[1] = SelectedTableColumnWidthB;
+                    }
+                    else
+                    {
+                        tableElement.ColumnWidths.Add(SelectedTableColumnWidthB);
+                    }
+                }
+                tableElement.Cells = new List<TableCell>
+                {
+                    new TableCell { ContentType = SelectedTableCell11Type, Content = SelectedTableCell11Content, BarcodeType = BarcodeType.Code128, QrCellWidth = SelectedQrCellWidth, QrErrorCorrectionLevel = SelectedQrErrorCorrectionLevel, QrMode = SelectedQrMode },
+                    new TableCell { ContentType = SelectedTableCell12Type, Content = SelectedTableCell12Content, BarcodeType = BarcodeType.Code128, QrCellWidth = SelectedQrCellWidth, QrErrorCorrectionLevel = SelectedQrErrorCorrectionLevel, QrMode = SelectedQrMode },
+                    new TableCell { ContentType = SelectedTableCell21Type, Content = SelectedTableCell21Content, BarcodeType = BarcodeType.Code128, QrCellWidth = SelectedQrCellWidth, QrErrorCorrectionLevel = SelectedQrErrorCorrectionLevel, QrMode = SelectedQrMode },
+                    new TableCell { ContentType = SelectedTableCell22Type, Content = SelectedTableCell22Content, BarcodeType = BarcodeType.Code128, QrCellWidth = SelectedQrCellWidth, QrErrorCorrectionLevel = SelectedQrErrorCorrectionLevel, QrMode = SelectedQrMode },
+                };
                 break;
         }
 
@@ -800,6 +968,20 @@ public partial class EditorViewModel : ObservableObject
             case EraseElement eraseElement:
                 SelectedEraseWidth = eraseElement.Width;
                 SelectedEraseHeight = eraseElement.Height;
+                break;
+            case TableElement tableElement:
+                SelectedTableRowHeight = tableElement.RowHeight;
+                SelectedTableColumnWidthA = tableElement.ColumnWidths.ElementAtOrDefault(0);
+                SelectedTableColumnWidthB = tableElement.ColumnWidths.ElementAtOrDefault(1);
+
+                SelectedTableCell11Type = tableElement.Cells.ElementAtOrDefault(0)?.ContentType ?? TableCellContentType.Text;
+                SelectedTableCell11Content = tableElement.Cells.ElementAtOrDefault(0)?.Content ?? string.Empty;
+                SelectedTableCell12Type = tableElement.Cells.ElementAtOrDefault(1)?.ContentType ?? TableCellContentType.Text;
+                SelectedTableCell12Content = tableElement.Cells.ElementAtOrDefault(1)?.Content ?? string.Empty;
+                SelectedTableCell21Type = tableElement.Cells.ElementAtOrDefault(2)?.ContentType ?? TableCellContentType.Text;
+                SelectedTableCell21Content = tableElement.Cells.ElementAtOrDefault(2)?.Content ?? string.Empty;
+                SelectedTableCell22Type = tableElement.Cells.ElementAtOrDefault(3)?.ContentType ?? TableCellContentType.Text;
+                SelectedTableCell22Content = tableElement.Cells.ElementAtOrDefault(3)?.Content ?? string.Empty;
                 break;
         }
 
