@@ -1,6 +1,7 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:converters="clr-namespace:SCLabelPrinter.Converters">
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="clr-namespace:SCLabelPrinter.Converters">
     <converters:StatusToBrushConverter x:Key="StatusToBrushConverter" />
 
     <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F4EBDC" />
@@ -21,7 +22,7 @@
         <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="CornerRadius" Value="3" />
         <Setter Property="Padding" Value="18" />
         <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
@@ -33,15 +34,19 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="14,8" />
         <Setter Property="Margin" Value="0,0,8,8" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="MinWidth" Value="84" />
+        <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="12"
-                            Padding="{TemplateBinding Padding}">
+                    <Border
+                        Padding="{TemplateBinding Padding}"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="3">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                 </ControlTemplate>
@@ -49,10 +54,22 @@
         </Setter>
     </Style>
 
-    <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Style
+        x:Key="SecondaryButtonStyle"
+        BasedOn="{StaticResource {x:Type Button}}"
+        TargetType="Button">
         <Setter Property="Foreground" Value="#38291E" />
         <Setter Property="Background" Value="#EADCC5" />
         <Setter Property="BorderBrush" Value="#EADCC5" />
+    </Style>
+
+    <Style
+        x:Key="ActionButtonStyle"
+        BasedOn="{StaticResource {x:Type Button}}"
+        TargetType="Button">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
 
     <Style x:Key="SectionTitleTextStyle" TargetType="TextBlock">
@@ -72,7 +89,9 @@
         <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="10,6" />
-        <Setter Property="Margin" Value="0,0,0,8" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
 
     <Style TargetType="ComboBox">
@@ -80,7 +99,8 @@
         <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="8,4" />
-        <Setter Property="Margin" Value="0,0,0,8" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+        <Setter Property="MinHeight" Value="34" />
     </Style>
 
     <Style TargetType="ListBox">
