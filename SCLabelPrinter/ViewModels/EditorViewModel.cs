@@ -205,6 +205,21 @@ public partial class EditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsEraseElementSelected));
     }
 
+    partial void OnSelectedElementIdChanged(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            SelectedElement = null;
+            return;
+        }
+
+        var element = Elements.FirstOrDefault(e => e.Id == value);
+        if (element is not null)
+        {
+            SelectedElement = element;
+        }
+    }
+
     /// <summary>
     /// 新建一个空白标签模板。
     /// </summary>
@@ -531,8 +546,22 @@ public partial class EditorViewModel : ObservableObject
             return;
         }
 
-        element.X = request.X;
-        element.Y = request.Y;
+        var deltaX = request.X - element.X;
+        var deltaY = request.Y - element.Y;
+
+        switch (element)
+        {
+            case BoxElement boxElement:
+                boxElement.X += deltaX;
+                boxElement.Y += deltaY;
+                boxElement.EndX += deltaX;
+                boxElement.EndY += deltaY;
+                break;
+            default:
+                element.X = request.X;
+                element.Y = request.Y;
+                break;
+        }
 
         if (SelectedElement?.Id == request.ElementId)
         {

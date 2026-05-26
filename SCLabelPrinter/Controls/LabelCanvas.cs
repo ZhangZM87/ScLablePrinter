@@ -18,6 +18,7 @@ namespace SCLabelPrinter.Controls;
 public sealed class LabelCanvas : FrameworkElement
 {
     private const double DotsPerMillimeter = 8.0;
+    private const int HitTestPadding = 8;
     private readonly Brush _backgroundBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFC));
     private readonly Brush _eraseBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFC));
     private readonly Pen _borderPen = new(new SolidColorBrush(Color.FromRgb(0xD9, 0xD2, 0xC3)), 1);
@@ -183,6 +184,15 @@ public sealed class LabelCanvas : FrameworkElement
         targetX = Math.Max(0, targetX);
         targetY = Math.Max(0, targetY);
 
+        var draggingElement = Template.Elements.FirstOrDefault(e => e.Id == _draggingElementId);
+        if (draggingElement is not null)
+        {
+            var maxX = GetMaxDragCoordinate(draggingElement, Template.Label, scale, true);
+            var maxY = GetMaxDragCoordinate(draggingElement, Template.Label, scale, false);
+            targetX = Math.Min(targetX, maxX);
+            targetY = Math.Min(targetY, maxY);
+        }
+
         var moveRequest = new ElementMoveRequest(_draggingElementId, targetX, targetY);
         var movedCommand = ElementMovedCommand;
         if (movedCommand is not null && movedCommand.CanExecute(moveRequest))
@@ -243,10 +253,26 @@ public sealed class LabelCanvas : FrameworkElement
         var widthDots = definition.Unit == LabelUnit.Millimeter ? definition.Width * DotsPerMillimeter : definition.Width;
         var heightDots = definition.Unit == LabelUnit.Millimeter ? definition.Height * DotsPerMillimeter : definition.Height;
 
+        if (widthDots <= 0 || heightDots <= 0)
+        {
+            return (1.0, surface.Location);
+        }
+
         var scale = Math.Min(surface.Width / Math.Max(widthDots, 1), surface.Height / Math.Max(heightDots, 1));
         var offsetX = surface.X + (surface.Width - widthDots * scale) / 2;
         var offsetY = surface.Y + (surface.Height - heightDots * scale) / 2;
         return (scale, new Point(offsetX, offsetY));
+    }
+
+    private static int GetMaxDragCoordinate(LabelElement element, LabelDefinition definition, double scale, bool isHorizontal)
+    {
+        var widthDots = definition.Unit == LabelUnit.Millimeter ? definition.Width * DotsPerMillimeter : definition.Width;
+        var heightDots = definition.Unit == LabelUnit.Millimeter ? definition.Height * DotsPerMillimeter : definition.Height;
+        var bounds = GetElementBounds(element, scale, new Point(0, 0));
+        var sizeInUnits = isHorizontal ? bounds.Width / scale : bounds.Height / scale;
+        var limit = isHorizontal ? widthDots : heightDots;
+        var max = (int)Math.Floor(Math.Max(0, limit - sizeInUnits));
+        return max;
     }
 
     /// <summary>
@@ -284,18 +310,24 @@ public sealed class LabelCanvas : FrameworkElement
 
     private bool IsPointOverElement(LabelElement element, Point point, double scale, Point origin)
     {
-        var bounds = GetElementBounds(element, scale, origin);
+        var hitBounds = GetElementHitBounds(element, scale, origin);
         if (element.Rotation % 360 != 0)
         {
-            var rotatedPoint = RotatePoint(point, bounds.TopLeft, -element.Rotation);
-            var rotatedBounds = GetElementBounds(element, scale, origin);
-            return rotatedBounds.Contains(rotatedPoint);
+            var rotatedPoint = RotatePoint(point, hitBounds.TopLeft, -element.Rotation);
+            return hitBounds.Contains(rotatedPoint);
         }
 
-        return bounds.Contains(point);
+        return hitBounds.Contains(point);
     }
 
-    private Rect GetElementBounds(LabelElement element, double scale, Point origin)
+    private static Rect GetElementHitBounds(LabelElement element, double scale, Point origin)
+    {
+        var bounds = GetElementBounds(element, scale, origin);
+        bounds.Inflate(HitTestPadding, HitTestPadding);
+        return bounds;
+    }
+
+    private static Rect GetElementBounds(LabelElement element, double scale, Point origin)
     {
         return element switch
         {
@@ -311,10 +343,11 @@ public sealed class LabelCanvas : FrameworkElement
 
     private void DrawSelectionHighlight(DrawingContext drawingContext, LabelElement element, double scale, Point origin)
     {
-        var bounds = GetElementBounds(element, scale, origin);
+        var bounds = GetElementHitBounds(element, scale, origin);
         if (element.Rotation % 360 != 0)
         {
-            var rotateTransform = new RotateTransform(element.Rotation % 360, bounds.X, bounds.Y);
+            var actualBounds = GetElementBounds(element, scale, origin);
+            var rotateTransform = new RotateTransform(element.Rotation % 360, actualBounds.X, actualBounds.Y);
             drawingContext.PushTransform(rotateTransform);
             drawingContext.DrawRectangle(null, _selectionPen, bounds);
             drawingContext.Pop();
@@ -334,27 +367,27 @@ public sealed class LabelCanvas : FrameworkElement
         return new Point(center.X + dx * cos - dy * sin, center.Y + dx * sin + dy * cos);
     }
 
-    private Rect GetTextBounds(TextElement element, double scale, Point origin)
+    private static Rect GetTextBounds(TextElement element, double scale, Point origin)
     {
         var width = Math.Max(20, MapTsplFontSize(element.Font) * scale * element.XScale * element.Content.Length * 0.5);
         var height = Math.Max(16, MapTsplFontSize(element.Font) * scale * element.YScale);
         return new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, width, height);
     }
 
-    private Rect GetBarcodeBounds(BarcodeElement element, double scale, Point origin)
+    private static Rect GetBarcodeBounds(BarcodeElement element, double scale, Point origin)
     {
         var width = EstimateBarcodeWidth(element) * scale;
         var height = Math.Max(20, element.Height) * scale;
         return new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, width, height);
     }
 
-    private Rect GetQrBounds(QrCodeElement element, double scale, Point origin)
+    private static Rect GetQrBounds(QrCodeElement element, double scale, Point origin)
     {
         var size = Math.Max(21 * Math.Max(1, element.CellWidth), 84) * scale;
         return new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, size, size);
     }
 
-    private Rect GetBoxBounds(BoxElement element, double scale, Point origin)
+    private static Rect GetBoxBounds(BoxElement element, double scale, Point origin)
     {
         return new Rect(
             origin.X + element.X * scale,

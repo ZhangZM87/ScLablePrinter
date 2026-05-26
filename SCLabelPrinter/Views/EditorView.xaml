@@ -57,7 +57,7 @@
                     </DockPanel>
                     <controls:LabelCanvas Grid.Row="1"
                                           Template="{Binding PreviewTemplate}"
-                                          SelectedElementId="{Binding SelectedElementId}"
+                                          SelectedElementId="{Binding SelectedElementId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                           ElementSelectedCommand="{Binding SelectElementByIdCommand}"
                                           ElementDragStartedCommand="{Binding BeginSelectedElementMoveCommand}"
                                           ElementMovedCommand="{Binding MoveSelectedElementCommand}" />
