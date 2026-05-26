@@ -1,0 +1,42 @@
+<UserControl x:Class="SCLabelPrinter.Views.FilePrintView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <Grid Margin="0,8,0,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1.5*" />
+            <ColumnDefinition Width="1*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,12,0">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="直接打印文件" />
+                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="文件路径" />
+                <DockPanel>
+                    <TextBox DockPanel.Dock="Left" Width="420" Text="{Binding FilePath, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding BrowseFileCommand}" Content="浏览" DockPanel.Dock="Right" />
+                </DockPanel>
+
+                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="打印份数" />
+                <TextBox Width="120" Text="{Binding Copies, UpdateSourceTrigger=PropertyChanged}" />
+
+                <Button Width="180" Command="{Binding PrintCommand}" Content="发送到打印机" />
+
+                <TextBlock Margin="0,18,0,0" Style="{StaticResource CaptionTextStyle}" Text="支持格式" />
+                <TextBlock TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" Text=".sclabel 会先生成 TSPL 指令；.txt 按 TSPL 文本发送；.prn / .bin 直接按二进制发送。" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Column="1" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,0">
+            <StackPanel>
+                <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="发送状态" />
+                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="载荷摘要" />
+                <TextBlock TextWrapping="Wrap" Text="{Binding PayloadSummary}" />
+                <TextBlock Margin="0,16,0,0" Style="{StaticResource CaptionTextStyle}" Text="打印进度" />
+                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding ProgressMessage}" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

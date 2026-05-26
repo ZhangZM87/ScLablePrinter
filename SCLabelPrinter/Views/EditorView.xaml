@@ -1,0 +1,188 @@
+<UserControl x:Class="SCLabelPrinter.Views.EditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:controls="clr-namespace:SCLabelPrinter.Controls"
+             xmlns:models="clr-namespace:SCLabelPrinter.Core.Models;assembly=SCLabelPrinter.Core"
+             mc:Ignorable="d">
+    <Grid Margin="0,8,0,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="340" />
+        </Grid.ColumnDefinitions>
+
+        <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,12,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="工具箱" />
+                    <WrapPanel>
+                        <Button Command="{Binding AddTextElementCommand}" Content="文本" />
+                        <Button Command="{Binding AddBarcodeElementCommand}" Content="条码" />
+                        <Button Command="{Binding AddQrCodeElementCommand}" Content="二维码" />
+                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddBoxElementCommand}" Content="矩形框" />
+                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddLineElementCommand}" Content="线条" />
+                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddEraseElementCommand}" Content="挖空" />
+                    </WrapPanel>
+
+                    <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionTitleTextStyle}" Text="元素列表" />
+                    <ListBox Height="240"
+                             ItemsSource="{Binding Elements}"
+                             SelectedItem="{Binding SelectedElement}" />
+                    <Button Command="{Binding RemoveSelectedElementCommand}" Content="删除选中元素" />
+
+                    <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionTitleTextStyle}" Text="最近文件" />
+                    <ListBox Height="160" ItemsSource="{Binding RecentFiles}" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Column="1" Margin="0,0,12,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="2.3*" />
+                <RowDefinition Height="12" />
+                <RowDefinition Height="1.4*" />
+            </Grid.RowDefinitions>
+
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel>
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="标签预览" DockPanel.Dock="Left" />
+                        <TextBlock Foreground="{StaticResource MutedTextBrush}" Text="预览强调布局与内容，不替代最终实物校准。" DockPanel.Dock="Right" />
+                    </DockPanel>
+                    <controls:LabelCanvas Grid.Row="1" Template="{Binding PreviewTemplate}" />
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Row="1" Height="12" HorizontalAlignment="Stretch" Background="#D8CBB7" />
+
+            <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="TSPL 预览" />
+                    <TextBox Grid.Row="1"
+                             AcceptsReturn="True"
+                             HorizontalScrollBarVisibility="Auto"
+                             VerticalScrollBarVisibility="Auto"
+                             Text="{Binding TsplPreview}"
+                             FontFamily="Cascadia Mono"
+                             FontSize="13"
+                             IsReadOnly="True" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="标签设置" />
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="宽度 (mm)" />
+                    <TextBox Text="{Binding LabelWidth, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="高度 (mm)" />
+                    <TextBox Text="{Binding LabelHeight, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="间距 (mm)" />
+                    <TextBox Text="{Binding LabelGap, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="打印浓度" />
+                    <TextBox Text="{Binding Density, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionTitleTextStyle}" Text="元素属性" />
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="位置 X" />
+                    <TextBox Text="{Binding ElementX, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="位置 Y" />
+                    <TextBox Text="{Binding ElementY, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="旋转角度" />
+                    <TextBox Text="{Binding ElementRotation, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Margin="0,10,0,0" Style="{StaticResource CaptionTextStyle}" Text="类型专属属性" />
+                    <ContentControl Content="{Binding SelectedElement}">
+                        <ContentControl.Resources>
+                            <DataTemplate DataType="{x:Type models:TextElement}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="文本内容" />
+                                    <TextBox Text="{Binding DataContext.SelectedTextContent, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="字体编号" />
+                                    <TextBox Text="{Binding DataContext.SelectedFont, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </DataTemplate>
+                            <DataTemplate DataType="{x:Type models:BarcodeElement}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="条码内容" />
+                                    <TextBox Text="{Binding DataContext.SelectedBarcodeContent, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="条码类型" />
+                                    <ComboBox SelectedValue="{Binding DataContext.SelectedBarcodeType, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="Code39" Tag="{x:Static models:BarcodeType.Code39}" />
+                                        <ComboBoxItem Content="Code128" Tag="{x:Static models:BarcodeType.Code128}" />
+                                        <ComboBoxItem Content="Ean13" Tag="{x:Static models:BarcodeType.Ean13}" />
+                                    </ComboBox>
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="条码高度" />
+                                    <TextBox Text="{Binding DataContext.SelectedBarcodeHeight, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="窄线宽" />
+                                    <TextBox Text="{Binding DataContext.SelectedBarcodeNarrow, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="宽线宽" />
+                                    <TextBox Text="{Binding DataContext.SelectedBarcodeWide, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </DataTemplate>
+                            <DataTemplate DataType="{x:Type models:QrCodeElement}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="二维码内容" />
+                                    <TextBox Text="{Binding DataContext.SelectedQrContent, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="纠错级别" />
+                                    <TextBox Text="{Binding DataContext.SelectedQrErrorCorrectionLevel, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="单元大小" />
+                                    <TextBox Text="{Binding DataContext.SelectedQrCellWidth, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </DataTemplate>
+                            <DataTemplate DataType="{x:Type models:BoxElement}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="终点 X" />
+                                    <TextBox Text="{Binding DataContext.SelectedBoxEndX, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="终点 Y" />
+                                    <TextBox Text="{Binding DataContext.SelectedBoxEndY, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="线宽" />
+                                    <TextBox Text="{Binding DataContext.SelectedBoxThickness, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </DataTemplate>
+                            <DataTemplate DataType="{x:Type models:LineElement}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="宽度" />
+                                    <TextBox Text="{Binding DataContext.SelectedLineWidth, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="高度" />
+                                    <TextBox Text="{Binding DataContext.SelectedLineHeight, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </DataTemplate>
+                            <DataTemplate DataType="{x:Type models:EraseElement}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="宽度" />
+                                    <TextBox Text="{Binding DataContext.SelectedEraseWidth, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="高度" />
+                                    <TextBox Text="{Binding DataContext.SelectedEraseHeight, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ContentControl.Resources>
+                    </ContentControl>
+
+                    <Button Command="{Binding ApplySelectedElementChangesCommand}" Content="应用属性更改" />
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding UndoCommand}" Content="撤销" />
+                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding RedoCommand}" Content="重做" />
+                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding SaveTemplateAsCommand}" Content="另存为" />
+                    </WrapPanel>
+
+                    <TextBlock Margin="0,12,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               Text="{Binding EditorHint}" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

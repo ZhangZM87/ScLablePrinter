@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="SCLabelPrinter.Core/SCLabelPrinter.Core.csproj" />
+  <Project Path="SCLabelPrinter.Infrastructure/SCLabelPrinter.Infrastructure.csproj" />
+  <Project Path="SCLabelPrinter.Tests/SCLabelPrinter.Tests.csproj" />
+  <Project Path="SCLabelPrinter/SCLabelPrinter.csproj" />
+</Solution>

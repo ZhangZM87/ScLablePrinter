@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SCLabelPrinter.Core\SCLabelPrinter.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="libUsbContorl">
+      <HintPath>..\..\C#\C#\C#版例程 20230523 Win10 21H2及Win11 USB\GprinterDemo230518\bin\Debug\libUsbContorl.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
