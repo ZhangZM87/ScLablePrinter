@@ -1,0 +1,13 @@
+﻿################################################################################
+# 此 .gitignore 文件已由 Microsoft(R) Visual Studio 自动创建。
+################################################################################
+
+/.vs
+/SCLabelPrinter/bin/Debug/net8.0-windows
+/SCLabelPrinter.Core/bin/Debug/net8.0
+/SCLabelPrinter.Core/obj
+/SCLabelPrinter.Infrastructure/bin/Debug
+/SCLabelPrinter.Infrastructure/obj
+/SCLabelPrinter.Tests/bin/Debug/net8.0
+/SCLabelPrinter.Tests/obj
+/SCLabelPrinter/obj
