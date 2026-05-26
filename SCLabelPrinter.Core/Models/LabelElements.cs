@@ -148,3 +148,8 @@ public sealed class EraseElement : LabelElement
         return $"挖空: {Width}x{Height}";
     }
 }
+
+/// <summary>
+/// 视图层通过画布拖动时传递的元素移动请求。
+/// </summary>
+public sealed record ElementMoveRequest(string ElementId, int X, int Y);

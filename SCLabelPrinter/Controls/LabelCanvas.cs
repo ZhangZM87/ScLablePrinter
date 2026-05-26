@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Linq;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using SCLabelPrinter.Core.Models;
@@ -20,6 +22,17 @@ public sealed class LabelCanvas : FrameworkElement
     private readonly Brush _eraseBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFC));
     private readonly Pen _borderPen = new(new SolidColorBrush(Color.FromRgb(0xD9, 0xD2, 0xC3)), 1);
     private readonly Brush _foregroundBrush = Brushes.Black;
+    private readonly Pen _selectionPen = new(new SolidColorBrush(Color.FromRgb(0x1D, 0x4E, 0x8E)), 1)
+    {
+        DashStyle = DashStyles.Dash
+    };
+    private string? _draggingElementId;
+    private Point _dragOffset;
+
+    public LabelCanvas()
+    {
+        Focusable = true;
+    }
 
     public static readonly DependencyProperty TemplateProperty = DependencyProperty.Register(
         nameof(Template),
@@ -27,10 +40,58 @@ public sealed class LabelCanvas : FrameworkElement
         typeof(LabelCanvas),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
 
+    public static readonly DependencyProperty SelectedElementIdProperty = DependencyProperty.Register(
+        nameof(SelectedElementId),
+        typeof(string),
+        typeof(LabelCanvas),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty ElementSelectedCommandProperty = DependencyProperty.Register(
+        nameof(ElementSelectedCommand),
+        typeof(ICommand),
+        typeof(LabelCanvas),
+        new FrameworkPropertyMetadata(null));
+
+    public static readonly DependencyProperty ElementDragStartedCommandProperty = DependencyProperty.Register(
+        nameof(ElementDragStartedCommand),
+        typeof(ICommand),
+        typeof(LabelCanvas),
+        new FrameworkPropertyMetadata(null));
+
+    public static readonly DependencyProperty ElementMovedCommandProperty = DependencyProperty.Register(
+        nameof(ElementMovedCommand),
+        typeof(ICommand),
+        typeof(LabelCanvas),
+        new FrameworkPropertyMetadata(null));
+
     public LabelTemplateDocument? Template
     {
         get => (LabelTemplateDocument?)GetValue(TemplateProperty);
         set => SetValue(TemplateProperty, value);
+    }
+
+    public string? SelectedElementId
+    {
+        get => (string?)GetValue(SelectedElementIdProperty);
+        set => SetValue(SelectedElementIdProperty, value);
+    }
+
+    public ICommand? ElementSelectedCommand
+    {
+        get => (ICommand?)GetValue(ElementSelectedCommandProperty);
+        set => SetValue(ElementSelectedCommandProperty, value);
+    }
+
+    public ICommand? ElementDragStartedCommand
+    {
+        get => (ICommand?)GetValue(ElementDragStartedCommandProperty);
+        set => SetValue(ElementDragStartedCommandProperty, value);
+    }
+
+    public ICommand? ElementMovedCommand
+    {
+        get => (ICommand?)GetValue(ElementMovedCommandProperty);
+        set => SetValue(ElementMovedCommandProperty, value);
     }
 
     /// <summary>
@@ -56,6 +117,104 @@ public sealed class LabelCanvas : FrameworkElement
         {
             DrawElement(drawingContext, element, scale, origin);
         }
+    }
+
+    /// <summary>
+    /// 开始鼠标拖动元素时进行选择并捕获鼠标。
+    /// </summary>
+    protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonDown(e);
+
+        if (Template is null)
+        {
+            return;
+        }
+
+        var mousePoint = e.GetPosition(this);
+        var surface = CreateSurfaceRect();
+        var (scale, origin) = CalculateScale(surface, Template.Label);
+        var hitElement = Template.Elements.AsEnumerable().Reverse().FirstOrDefault(el => IsPointOverElement(el, mousePoint, scale, origin));
+        if (hitElement is null)
+        {
+            return;
+        }
+
+        _draggingElementId = hitElement.Id;
+        var elementBounds = GetElementBounds(hitElement, scale, origin);
+        _dragOffset = new Point(mousePoint.X - elementBounds.X, mousePoint.Y - elementBounds.Y);
+        CaptureMouse();
+        SelectedElementId = hitElement.Id;
+
+        // 画布元素被点击时通知外部视图模型，选择和拖动由外部命令处理。
+        //var selectedCommand = ElementSelectedCommand;
+        //if (selectedCommand is not null && selectedCommand.CanExecute(hitElement.Id))
+        //{
+        //    selectedCommand.Execute(hitElement.Id);
+        //}
+
+        //var dragStartedCommand = ElementDragStartedCommand;
+        //if (dragStartedCommand is not null && dragStartedCommand.CanExecute(hitElement.Id))
+        //{
+        //    dragStartedCommand.Execute(hitElement.Id);
+        //}
+
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 鼠标移动时更新拖动元素位置。
+    /// </summary>
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+
+        if (_draggingElementId is null || !IsMouseCaptured || Template is null)
+        {
+            return;
+        }
+
+        var mousePoint = e.GetPosition(this);
+        var surface = CreateSurfaceRect();
+        var (scale, origin) = CalculateScale(surface, Template.Label);
+        var targetPoint = new Point(mousePoint.X - _dragOffset.X, mousePoint.Y - _dragOffset.Y);
+        var targetX = (int)Math.Round((targetPoint.X - origin.X) / scale);
+        var targetY = (int)Math.Round((targetPoint.Y - origin.Y) / scale);
+        targetX = Math.Max(0, targetX);
+        targetY = Math.Max(0, targetY);
+
+        var moveRequest = new ElementMoveRequest(_draggingElementId, targetX, targetY);
+        var movedCommand = ElementMovedCommand;
+        if (movedCommand is not null && movedCommand.CanExecute(moveRequest))
+        {
+            movedCommand.Execute(moveRequest);
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 释放鼠标时结束拖动。
+    /// </summary>
+    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnMouseLeftButtonUp(e);
+
+        if (_draggingElementId is not null && IsMouseCaptured)
+        {
+            ReleaseMouseCapture();
+            _draggingElementId = null;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// 鼠标捕获丢失时清理拖动状态。
+    /// </summary>
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        _draggingElementId = null;
     }
 
     /// <summary>
@@ -116,6 +275,92 @@ public sealed class LabelCanvas : FrameworkElement
                 DrawEraseElement(drawingContext, eraseElement, scale, origin);
                 break;
         }
+
+        if (element.Id == SelectedElementId)
+        {
+            DrawSelectionHighlight(drawingContext, element, scale, origin);
+        }
+    }
+
+    private bool IsPointOverElement(LabelElement element, Point point, double scale, Point origin)
+    {
+        var bounds = GetElementBounds(element, scale, origin);
+        if (element.Rotation % 360 != 0)
+        {
+            var rotatedPoint = RotatePoint(point, bounds.TopLeft, -element.Rotation);
+            var rotatedBounds = GetElementBounds(element, scale, origin);
+            return rotatedBounds.Contains(rotatedPoint);
+        }
+
+        return bounds.Contains(point);
+    }
+
+    private Rect GetElementBounds(LabelElement element, double scale, Point origin)
+    {
+        return element switch
+        {
+            TextElement textElement => GetTextBounds(textElement, scale, origin),
+            BarcodeElement barcodeElement => GetBarcodeBounds(barcodeElement, scale, origin),
+            QrCodeElement qrCodeElement => GetQrBounds(qrCodeElement, scale, origin),
+            BoxElement boxElement => GetBoxBounds(boxElement, scale, origin),
+            LineElement lineElement => new Rect(origin.X + lineElement.X * scale, origin.Y + lineElement.Y * scale, Math.Max(1, lineElement.Width * scale), Math.Max(1, lineElement.Height * scale)),
+            EraseElement eraseElement => new Rect(origin.X + eraseElement.X * scale, origin.Y + eraseElement.Y * scale, Math.Max(1, eraseElement.Width * scale), Math.Max(1, eraseElement.Height * scale)),
+            _ => new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, 1, 1),
+        };
+    }
+
+    private void DrawSelectionHighlight(DrawingContext drawingContext, LabelElement element, double scale, Point origin)
+    {
+        var bounds = GetElementBounds(element, scale, origin);
+        if (element.Rotation % 360 != 0)
+        {
+            var rotateTransform = new RotateTransform(element.Rotation % 360, bounds.X, bounds.Y);
+            drawingContext.PushTransform(rotateTransform);
+            drawingContext.DrawRectangle(null, _selectionPen, bounds);
+            drawingContext.Pop();
+            return;
+        }
+
+        drawingContext.DrawRectangle(null, _selectionPen, bounds);
+    }
+
+    private static Point RotatePoint(Point point, Point center, int angle)
+    {
+        var radians = angle * Math.PI / 180.0;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        var dx = point.X - center.X;
+        var dy = point.Y - center.Y;
+        return new Point(center.X + dx * cos - dy * sin, center.Y + dx * sin + dy * cos);
+    }
+
+    private Rect GetTextBounds(TextElement element, double scale, Point origin)
+    {
+        var width = Math.Max(20, MapTsplFontSize(element.Font) * scale * element.XScale * element.Content.Length * 0.5);
+        var height = Math.Max(16, MapTsplFontSize(element.Font) * scale * element.YScale);
+        return new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, width, height);
+    }
+
+    private Rect GetBarcodeBounds(BarcodeElement element, double scale, Point origin)
+    {
+        var width = EstimateBarcodeWidth(element) * scale;
+        var height = Math.Max(20, element.Height) * scale;
+        return new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, width, height);
+    }
+
+    private Rect GetQrBounds(QrCodeElement element, double scale, Point origin)
+    {
+        var size = Math.Max(21 * Math.Max(1, element.CellWidth), 84) * scale;
+        return new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, size, size);
+    }
+
+    private Rect GetBoxBounds(BoxElement element, double scale, Point origin)
+    {
+        return new Rect(
+            origin.X + element.X * scale,
+            origin.Y + element.Y * scale,
+            Math.Max(1, (element.EndX - element.X) * scale),
+            Math.Max(1, (element.EndY - element.Y) * scale));
     }
 
     /// <summary>

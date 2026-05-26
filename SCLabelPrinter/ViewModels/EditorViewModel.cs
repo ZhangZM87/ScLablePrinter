@@ -73,6 +73,9 @@ public partial class EditorViewModel : ObservableObject
     private LabelElement? selectedElement;
 
     [ObservableProperty]
+    private string? selectedElementId;
+
+    [ObservableProperty]
     private int elementX;
 
     [ObservableProperty]
@@ -190,6 +193,7 @@ public partial class EditorViewModel : ObservableObject
     /// </summary>
     partial void OnSelectedElementChanged(LabelElement? value)
     {
+        SelectedElementId = value?.Id;
         LoadSelectedElementEditor(value);
         OnPropertyChanged(nameof(IsTextElementSelected));
         OnPropertyChanged(nameof(IsBarcodeElementSelected));
@@ -438,6 +442,72 @@ public partial class EditorViewModel : ObservableObject
         RefreshPreview();
         EditorHint = "属性已应用并刷新预览";
         _statusCenter.SetActivityMessage("元素属性已更新");
+    }
+
+    /// <summary>
+    /// 在画布上选中指定元素。
+    /// </summary>
+    [RelayCommand]
+    private void SelectElementById(string elementId)
+    {
+        if (string.IsNullOrWhiteSpace(elementId))
+        {
+            return;
+        }
+
+        var element = Elements.FirstOrDefault(e => e.Id == elementId);
+        if (element is null)
+        {
+            return;
+        }
+
+        SelectedElement = element;
+        _statusCenter.SetActivityMessage("已选中画布元素");
+    }
+
+    /// <summary>
+    /// 在画布开始拖动元素之前记录快照。
+    /// </summary>
+    [RelayCommand]
+    private void BeginSelectedElementMove(string elementId)
+    {
+        if (string.IsNullOrWhiteSpace(elementId))
+        {
+            return;
+        }
+
+        SelectElementById(elementId);
+        CaptureUndoSnapshot();
+    }
+
+    /// <summary>
+    /// 接收画布拖动后更新的元素坐标。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanEditSelectedElement))]
+    private void MoveSelectedElement(ElementMoveRequest request)
+    {
+        if (request is null)
+        {
+            return;
+        }
+
+        var element = Elements.FirstOrDefault(e => e.Id == request.ElementId);
+        if (element is null)
+        {
+            return;
+        }
+
+        element.X = request.X;
+        element.Y = request.Y;
+
+        if (SelectedElement?.Id == request.ElementId)
+        {
+            ElementX = request.X;
+            ElementY = request.Y;
+        }
+
+        RefreshPreview();
+        _statusCenter.SetActivityMessage("元素位置已更新");
     }
 
     /// <summary>

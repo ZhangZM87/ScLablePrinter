@@ -55,7 +55,12 @@
                         <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="标签预览" DockPanel.Dock="Left" />
                         <TextBlock Foreground="{StaticResource MutedTextBrush}" Text="预览强调布局与内容，不替代最终实物校准。" DockPanel.Dock="Right" />
                     </DockPanel>
-                    <controls:LabelCanvas Grid.Row="1" Template="{Binding PreviewTemplate}" />
+                    <controls:LabelCanvas Grid.Row="1"
+                                          Template="{Binding PreviewTemplate}"
+                                          SelectedElementId="{Binding SelectedElementId}"
+                                          ElementSelectedCommand="{Binding SelectElementByIdCommand}"
+                                          ElementDragStartedCommand="{Binding BeginSelectedElementMoveCommand}"
+                                          ElementMovedCommand="{Binding MoveSelectedElementCommand}" />
                 </Grid>
             </Border>
 
