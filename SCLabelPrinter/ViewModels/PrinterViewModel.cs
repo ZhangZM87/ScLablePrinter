@@ -13,15 +13,17 @@ namespace SCLabelPrinter.ViewModels;
 public partial class PrinterViewModel : ObservableObject
 {
     private readonly IPrinterService _printerService;
+    private readonly IUserNotificationService _notificationService;
     private readonly StatusCenter _statusCenter;
     private readonly DispatcherTimer _statusTimer;
 
     /// <summary>
     /// 创建打印机管理视图模型。
     /// </summary>
-    public PrinterViewModel(IPrinterService printerService, StatusCenter statusCenter)
+    public PrinterViewModel(IPrinterService printerService, IUserNotificationService notificationService, StatusCenter statusCenter)
     {
         _printerService = printerService;
+        _notificationService = notificationService;
         _statusCenter = statusCenter;
         _statusTimer = new DispatcherTimer
         {
@@ -70,6 +72,11 @@ public partial class PrinterViewModel : ObservableObject
             SelectedPrinter = Printers.FirstOrDefault();
             _statusCenter.SetActivityMessage($"已扫描到 {Printers.Count} 台打印机");
         }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"扫描打印机失败: {ex.Message}");
+            _statusCenter.SetActivityMessage("扫描打印机失败");
+        }
         finally
         {
             IsBusy = false;
@@ -99,6 +106,11 @@ public partial class PrinterViewModel : ObservableObject
                 _statusTimer.Start();
                 await QueryStatusAsync();
             }
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"连接打印机失败: {ex.Message}");
+            _statusCenter.SetActivityMessage("连接打印机失败");
         }
         finally
         {
@@ -134,10 +146,18 @@ public partial class PrinterViewModel : ObservableObject
             return;
         }
 
-        var status = await _printerService.QueryStatusAsync();
-        CurrentState = status.State;
-        CurrentStatusText = status.Description;
-        _statusCenter.SetActivityMessage($"打印机状态: {status.Description}");
+        try
+        {
+            var status = await _printerService.QueryStatusAsync();
+            CurrentState = status.State;
+            CurrentStatusText = status.Description;
+            _statusCenter.SetActivityMessage($"打印机状态: {status.Description}");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"查询打印机状态失败: {ex.Message}");
+            _statusCenter.SetActivityMessage("查询打印机状态失败");
+        }
     }
 
     /// <summary>
@@ -152,8 +172,16 @@ public partial class PrinterViewModel : ObservableObject
             return;
         }
 
-        CurrentModelText = await _printerService.QueryModelAsync();
-        _statusCenter.SetActivityMessage(string.IsNullOrWhiteSpace(CurrentModelText) ? "未获取到型号文本" : $"打印机型号: {CurrentModelText}");
+        try
+        {
+            CurrentModelText = await _printerService.QueryModelAsync();
+            _statusCenter.SetActivityMessage(string.IsNullOrWhiteSpace(CurrentModelText) ? "未获取到型号文本" : $"打印机型号: {CurrentModelText}");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"查询打印机型号失败: {ex.Message}");
+            _statusCenter.SetActivityMessage("查询打印机型号失败");
+        }
     }
 
     /// <summary>
@@ -181,12 +209,13 @@ public partial class PrinterViewModel : ObservableObject
             CurrentStatusText = status.Description;
             _statusCenter.SetActivityMessage($"自动轮询状态: {status.Description}");
         }
-        catch
+        catch (Exception ex)
         {
             _statusTimer.Stop();
             IsConnected = false;
             CurrentState = PrinterState.Unknown;
             CurrentStatusText = "状态轮询失败";
+            _notificationService.ShowError($"打印机状态轮询失败: {ex.Message}");
             _statusCenter.SetPrinterMessage("打印机: 连接异常");
             _statusCenter.SetActivityMessage("自动轮询失败，请重新连接打印机");
         }

@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
+using HandyControl;
 using SCLabelPrinter.Core.Printing;
 using SCLabelPrinter.Core.Printers;
 using SCLabelPrinter.Core.Serialization;
@@ -53,6 +54,7 @@ public partial class App : Application
 	private static void ConfigureServices(IServiceCollection services)
 	{
 		services.AddSingleton<StatusCenter>();
+		services.AddSingleton<IUserNotificationService, HandyControlNotificationService>();
 		services.AddSingleton<IFileDialogService, FileDialogService>();
 
 		services.AddSingleton<IElementTsplWriter, TextElementTsplWriter>();

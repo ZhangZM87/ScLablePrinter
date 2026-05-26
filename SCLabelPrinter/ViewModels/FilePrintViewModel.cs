@@ -15,16 +15,18 @@ public partial class FilePrintViewModel : ObservableObject
     private readonly IPrintFileService _printFileService;
     private readonly IPrinterService _printerService;
     private readonly IFileDialogService _fileDialogService;
+    private readonly IUserNotificationService _notificationService;
     private readonly StatusCenter _statusCenter;
 
     /// <summary>
     /// 创建文件打印视图模型。
     /// </summary>
-    public FilePrintViewModel(IPrintFileService printFileService, IPrinterService printerService, IFileDialogService fileDialogService, StatusCenter statusCenter)
+    public FilePrintViewModel(IPrintFileService printFileService, IPrinterService printerService, IFileDialogService fileDialogService, IUserNotificationService notificationService, StatusCenter statusCenter)
     {
         _printFileService = printFileService;
         _printerService = printerService;
         _fileDialogService = fileDialogService;
+        _notificationService = notificationService;
         _statusCenter = statusCenter;
     }
 
@@ -87,6 +89,11 @@ public partial class FilePrintViewModel : ObservableObject
 
             ProgressMessage = "发送完成";
             _statusCenter.SetActivityMessage($"文件打印完成: {Path.GetFileName(FilePath)}");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"文件打印失败: {ex.Message}");
+            _statusCenter.SetActivityMessage("文件打印失败");
         }
         finally
         {

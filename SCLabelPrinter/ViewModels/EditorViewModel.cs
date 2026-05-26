@@ -20,6 +20,7 @@ public partial class EditorViewModel : ObservableObject
     private readonly ILabelTemplateStorageService _storageService;
     private readonly IPrinterService _printerService;
     private readonly IFileDialogService _fileDialogService;
+    private readonly IUserNotificationService _notificationService;
     private readonly StatusCenter _statusCenter;
     private readonly TsplGenerator _tsplGenerator;
     private readonly LabelTemplateSerializer _serializer;
@@ -30,11 +31,12 @@ public partial class EditorViewModel : ObservableObject
     /// <summary>
     /// 创建标签编辑器视图模型。
     /// </summary>
-    public EditorViewModel(ILabelTemplateStorageService storageService, IPrinterService printerService, IFileDialogService fileDialogService, StatusCenter statusCenter, TsplGenerator tsplGenerator, LabelTemplateSerializer serializer)
+    public EditorViewModel(ILabelTemplateStorageService storageService, IPrinterService printerService, IFileDialogService fileDialogService, IUserNotificationService notificationService, StatusCenter statusCenter, TsplGenerator tsplGenerator, LabelTemplateSerializer serializer)
     {
         _storageService = storageService;
         _printerService = printerService;
         _fileDialogService = fileDialogService;
+        _notificationService = notificationService;
         _statusCenter = statusCenter;
         _tsplGenerator = tsplGenerator;
         _serializer = serializer;
@@ -224,10 +226,18 @@ public partial class EditorViewModel : ObservableObject
             return;
         }
 
-        CaptureUndoSnapshot();
-        var template = await _storageService.LoadAsync(path);
-        ApplyTemplate(template, path, true);
-        _statusCenter.SetActivityMessage($"已打开模板 {Path.GetFileName(path)}");
+        try
+        {
+            CaptureUndoSnapshot();
+            var template = await _storageService.LoadAsync(path);
+            ApplyTemplate(template, path, true);
+            _statusCenter.SetActivityMessage($"已打开模板 {Path.GetFileName(path)}");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"打开模板失败: {ex.Message}");
+            _statusCenter.SetActivityMessage("打开模板失败");
+        }
     }
 
     /// <summary>
@@ -242,9 +252,17 @@ public partial class EditorViewModel : ObservableObject
             return;
         }
 
-        await _storageService.SaveAsync(CurrentFilePath, BuildTemplateSnapshot());
-        AddRecentFile(CurrentFilePath);
-        _statusCenter.SetActivityMessage($"模板已保存到 {Path.GetFileName(CurrentFilePath)}");
+        try
+        {
+            await _storageService.SaveAsync(CurrentFilePath, BuildTemplateSnapshot());
+            AddRecentFile(CurrentFilePath);
+            _statusCenter.SetActivityMessage($"模板已保存到 {Path.GetFileName(CurrentFilePath)}");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"保存模板失败: {ex.Message}");
+            _statusCenter.SetActivityMessage("保存模板失败");
+        }
     }
 
     /// <summary>
@@ -258,10 +276,18 @@ public partial class EditorViewModel : ObservableObject
             return;
         }
 
-        CurrentFilePath = path;
-        await _storageService.SaveAsync(path, BuildTemplateSnapshot());
-        AddRecentFile(path);
-        _statusCenter.SetActivityMessage($"模板已另存为 {Path.GetFileName(path)}");
+        try
+        {
+            CurrentFilePath = path;
+            await _storageService.SaveAsync(path, BuildTemplateSnapshot());
+            AddRecentFile(path);
+            _statusCenter.SetActivityMessage($"模板已另存为 {Path.GetFileName(path)}");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"另存模板失败: {ex.Message}");
+            _statusCenter.SetActivityMessage("另存模板失败");
+        }
     }
 
     /// <summary>
@@ -276,9 +302,17 @@ public partial class EditorViewModel : ObservableObject
             return;
         }
 
-        var command = _tsplGenerator.Generate(BuildTemplateSnapshot(), 1);
-        await _printerService.SendDataAsync(Encoding.GetEncoding(54936).GetBytes(command));
-        _statusCenter.SetActivityMessage("模板内容已发送到打印机");
+        try
+        {
+            var command = _tsplGenerator.Generate(BuildTemplateSnapshot(), 1);
+            await _printerService.SendDataAsync(Encoding.GetEncoding(54936).GetBytes(command));
+            _statusCenter.SetActivityMessage("模板内容已发送到打印机");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"打印模板失败: {ex.Message}");
+            _statusCenter.SetActivityMessage("打印模板失败");
+        }
     }
 
     /// <summary>
