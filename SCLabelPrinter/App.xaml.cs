@@ -65,6 +65,7 @@ public partial class App : Application
 		services.AddSingleton<IElementTsplWriter, EraseElementTsplWriter>();
         services.AddSingleton<IElementTsplWriter, TableElementTsplWriter>();
 		services.AddSingleton<TsplGenerator>();
+		services.AddSingleton<ITsplParser, TsplParser>();
 		services.AddSingleton<PrintDataChunker>();
 		services.AddSingleton<PrinterStatusInterpreter>();
 

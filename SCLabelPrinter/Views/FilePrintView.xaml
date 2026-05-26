@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="clr-namespace:SCLabelPrinter.Controls"
     mc:Ignorable="d">
     <Grid Margin="0,12,0,0">
         <Grid.ColumnDefinitions>
@@ -61,7 +62,46 @@
                     Style="{StaticResource ActionButtonStyle}" />
 
                 <TextBlock
-                    Margin="24,22,0,8"
+                    Margin="0,22,0,8"
+                    Style="{StaticResource CaptionTextStyle}"
+                    Text="文件预览" />
+                <Border
+                    Padding="10"
+                    Background="#FFF7F8FB"
+                    BorderBrush="#E7E0D7"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    MinHeight="260"
+                    Margin="0,0,0,20">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="220" />
+                            <RowDefinition Height="12" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <controls:LabelCanvas
+                            Grid.Row="0"
+                            Template="{Binding FilePreviewTemplate}"
+                            MinHeight="220"
+                            SnapsToDevicePixels="True" />
+
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                            <TextBox
+                                Text="{Binding FilePreview}"
+                                TextWrapping="Wrap"
+                                IsReadOnly="True"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Foreground="{StaticResource MutedTextBrush}"
+                                AcceptsReturn="True"
+                                MinHeight="80" />
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <TextBlock
+                    Margin="0,0,0,8"
                     Style="{StaticResource CaptionTextStyle}"
                     Text="支持格式" />
                 <Border

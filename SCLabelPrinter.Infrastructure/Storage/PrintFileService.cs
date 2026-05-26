@@ -58,12 +58,23 @@ public sealed class PrintFileService : IPrintFileService
     /// </summary>
     private static async Task<PrintPayload> LoadTextPayloadAsync(string path, CancellationToken cancellationToken)
     {
-        var text = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+        var rawBytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+        var rawText = Encoding.GetEncoding(54936).GetString(rawBytes);
+        if (TsplTextDecoder.TryDecodeHexDump(rawText, out var decodedBytes))
+        {
+            return new PrintPayload
+            {
+                SourcePath = path,
+                ContentType = "text-hex",
+                Data = decodedBytes,
+            };
+        }
+
         return new PrintPayload
         {
             SourcePath = path,
             ContentType = "text",
-            Data = Encoding.GetEncoding(54936).GetBytes(text),
+            Data = Encoding.GetEncoding(54936).GetBytes(rawText),
         };
     }
 
