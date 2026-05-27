@@ -47,7 +47,7 @@ public static class TsplTextDecoder
         if (trimmed.All(ch => char.IsWhiteSpace(ch) || IsHexDigit(ch)))
         {
             var cleaned = new string(trimmed.Where(ch => !char.IsWhiteSpace(ch)).ToArray());
-            if (cleaned.Length % 2 != 0 || cleaned.Length > 40000)
+            if (cleaned.Length % 2 != 0)
             {
                 return false;
             }

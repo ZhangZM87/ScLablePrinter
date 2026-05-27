@@ -9,6 +9,8 @@ namespace SCLabelPrinter.Core.Printing;
 /// </summary>
 public sealed class TsplParser : ITsplParser
 {
+    private static readonly Encoding TsplEncoding = CreateTsplEncoding();
+
     /// <summary>
     /// 解析 TSPL 文本为标签模板文档。
     /// </summary>
@@ -30,48 +32,130 @@ public sealed class TsplParser : ITsplParser
                 continue;
             }
 
-            var firstSpace = line.IndexOf(' ');
-            var command = firstSpace < 0 ? line.ToUpperInvariant() : line[..firstSpace].ToUpperInvariant();
-            var arguments = firstSpace < 0 ? string.Empty : line[(firstSpace + 1)..].Trim();
+            ParseLine(document, line);
+        }
 
-            switch (command)
+        return document;
+    }
+
+    /// <summary>
+    /// 解析 TSPL 原始字节流为标签模板文档，支持 BITMAP 二进制载荷。
+    /// </summary>
+    public LabelTemplateDocument Parse(byte[] tsplBytes)
+    {
+        if (tsplBytes == null || tsplBytes.Length == 0)
+        {
+            throw new ArgumentException("TSPL 字节不能为空。", nameof(tsplBytes));
+        }
+
+        var document = new LabelTemplateDocument();
+        document.Label = new LabelDefinition();
+
+        var index = 0;
+        while (index < tsplBytes.Length)
+        {
+            // 跳过行首换行符。
+            while (index < tsplBytes.Length && (tsplBytes[index] == 0x0D || tsplBytes[index] == 0x0A))
             {
-                case "SIZE":
-                    ParseSize(document.Label, arguments);
-                    break;
-                case "GAP":
-                    ParseGap(document.Label, arguments);
-                    break;
-                case "DENSITY":
-                    document.Label.Density = ParseInt(arguments, document.Label.Density);
-                    break;
-                case "BOX":
-                    ParseBox(document, arguments);
-                    break;
-                case "BAR":
-                    ParseBar(document, arguments);
-                    break;
-                case "ERASE":
-                    ParseErase(document, arguments);
-                    break;
-                case "TEXT":
-                    ParseText(document, arguments);
-                    break;
-                case "BARCODE":
-                    ParseBarcode(document, arguments);
-                    break;
-                case "QRCODE":
-                    ParseQrCode(document, arguments);
-                    break;
-                case "BITMAP":
-                    ParseBitmap(document, arguments);
-                    break;
-                case "CLS":
-                case "PRINT":
-                    break;
-                default:
-                    break;
+                index++;
             }
+
+            if (index >= tsplBytes.Length)
+            {
+                break;
+            }
+
+            var start = index;
+            while (index < tsplBytes.Length && tsplBytes[index] != 0x20 && tsplBytes[index] != 0x09 && tsplBytes[index] != 0x0D && tsplBytes[index] != 0x0A)
+            {
+                index++;
+            }
+
+            var command = TsplEncoding.GetString(tsplBytes.AsSpan(start, index - start)).ToUpperInvariant();
+            if (string.IsNullOrEmpty(command))
+            {
+                continue;
+            }
+
+            if (command == "BITMAP")
+            {
+                while (index < tsplBytes.Length && (tsplBytes[index] == 0x20 || tsplBytes[index] == 0x09))
+                {
+                    index++;
+                }
+
+                var headerStart = index;
+                var commaCount = 0;
+                int headerEnd = index;
+                while (headerEnd < tsplBytes.Length && tsplBytes[headerEnd] != 0x0D && tsplBytes[headerEnd] != 0x0A)
+                {
+                    if (tsplBytes[headerEnd] == (byte)',')
+                    {
+                        commaCount++;
+                        if (commaCount == 5)
+                        {
+                            headerEnd++;
+                            break;
+                        }
+                    }
+
+                    headerEnd++;
+                }
+
+                if (commaCount != 5 || headerEnd > tsplBytes.Length)
+                {
+                    throw new FormatException("无法解析 BITMAP 命令头。文件可能包含损坏的 BITMAP 数据。");
+                }
+
+                var headerText = TsplEncoding.GetString(tsplBytes.AsSpan(headerStart, headerEnd - headerStart));
+                var headerArgs = headerText.TrimEnd(',').Split(',', StringSplitOptions.RemoveEmptyEntries);
+                if (headerArgs.Length < 5)
+                {
+                    throw new FormatException("BITMAP 命令头缺少参数。文件可能包含损坏的 BITMAP 数据。");
+                }
+
+                var x = ParseInt(headerArgs[0]);
+                var y = ParseInt(headerArgs[1]);
+                var widthBytes = ParseInt(headerArgs[2]);
+                var height = ParseInt(headerArgs[3]);
+                var mode = ParseInt(headerArgs[4], 0);
+
+                var dataStart = headerEnd;
+                var expectedDataLength = Math.Max(0, widthBytes * height);
+                if (dataStart + expectedDataLength > tsplBytes.Length)
+                {
+                    expectedDataLength = Math.Max(0, tsplBytes.Length - dataStart);
+                }
+
+                var bitmapData = tsplBytes.AsSpan(dataStart, expectedDataLength).ToArray();
+                document.Elements.Add(new BitmapElement
+                {
+                    X = x,
+                    Y = y,
+                    Width = widthBytes * 8,
+                    Height = height,
+                    Mode = mode,
+                    Data = bitmapData,
+                });
+
+                index = dataStart + expectedDataLength;
+                while (index < tsplBytes.Length && (tsplBytes[index] == 0x0D || tsplBytes[index] == 0x0A))
+                {
+                    index++;
+                }
+
+                continue;
+            }
+
+            var lineEnd = index;
+            while (lineEnd < tsplBytes.Length && tsplBytes[lineEnd] != 0x0D && tsplBytes[lineEnd] != 0x0A)
+            {
+                lineEnd++;
+            }
+
+            var line = TsplEncoding.GetString(tsplBytes.AsSpan(start, lineEnd - start));
+            ParseLine(document, line.Trim());
+            index = lineEnd;
         }
 
         return document;
@@ -91,6 +175,75 @@ public sealed class TsplParser : ITsplParser
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// 尝试解析 TSPL 原始字节流为标签模板文档。
+    /// </summary>
+    public bool TryParse(byte[] tsplBytes, out LabelTemplateDocument? template)
+    {
+        template = null;
+        try
+        {
+            template = Parse(tsplBytes);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static Encoding CreateTsplEncoding()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        return Encoding.GetEncoding(54936);
+    }
+
+    private static void ParseLine(LabelTemplateDocument document, string line)
+    {
+        var firstSpace = line.IndexOf(' ');
+        var command = firstSpace < 0 ? line.ToUpperInvariant() : line[..firstSpace].ToUpperInvariant();
+        var arguments = firstSpace < 0 ? string.Empty : line[(firstSpace + 1)..].Trim();
+
+        switch (command)
+        {
+            case "SIZE":
+                ParseSize(document.Label, arguments);
+                break;
+            case "GAP":
+                ParseGap(document.Label, arguments);
+                break;
+            case "DENSITY":
+                document.Label.Density = ParseInt(arguments, document.Label.Density);
+                break;
+            case "BOX":
+                ParseBox(document, arguments);
+                break;
+            case "BAR":
+                ParseBar(document, arguments);
+                break;
+            case "ERASE":
+                ParseErase(document, arguments);
+                break;
+            case "TEXT":
+                ParseText(document, arguments);
+                break;
+            case "BARCODE":
+                ParseBarcode(document, arguments);
+                break;
+            case "QRCODE":
+                ParseQrCode(document, arguments);
+                break;
+            case "BITMAP":
+                ParseBitmap(document, arguments);
+                break;
+            case "CLS":
+            case "PRINT":
+                break;
+            default:
+                break;
         }
     }
 

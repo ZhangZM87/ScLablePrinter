@@ -32,6 +32,34 @@ public sealed class TsplInputAnalyzerTests
     }
 
     /// <summary>
+    /// 对较大 TSPL 十六进制转储仍应正确识别，而不是被长度阈值拒绝。
+    /// </summary>
+    [TestMethod]
+    public void Analyze_ShouldRecognizeLargeHexDumpTsplPayload()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("SIZE 40 mm,40 mm");
+        for (var index = 0; index < 1200; index++)
+        {
+            builder.AppendLine($"TEXT 10,10,\"3\",0,1,1,\"HELLO{index}\"");
+        }
+
+        builder.AppendLine("PRINT 1");
+        var tsplText = builder.ToString();
+        var rawPayload = Encoding.ASCII.GetBytes(tsplText);
+        var hexDump = string.Concat(rawPayload.Select(b => b.ToString("X2", CultureInfo.InvariantCulture)));
+        Assert.IsTrue(hexDump.Length > 40000, "The generated hex dump must exceed the legacy decoder threshold.");
+
+        var analyzer = new TsplInputAnalyzer();
+        var analysis = analyzer.Analyze(Encoding.ASCII.GetBytes(hexDump));
+
+        Assert.AreEqual(PrintInputKind.TsplCommands, analysis.Kind);
+        Assert.IsTrue(analysis.IsHexDump);
+        Assert.IsTrue(analysis.ShouldRenderGraphicPreview);
+        StringAssert.Contains(analysis.DecodedText, "SIZE 40 mm,40 mm");
+    }
+
+    /// <summary>
     /// 控制字符占比明显过高的载荷应当回退为二进制打印包，而不是错误按文本解析。
     /// </summary>
     [TestMethod]
@@ -45,5 +73,24 @@ public sealed class TsplInputAnalyzerTests
         Assert.AreEqual(PrintInputKind.Binary, analysis.Kind);
         Assert.IsFalse(analysis.ShouldRenderGraphicPreview);
         CollectionAssert.AreEqual(payload, analysis.PayloadBytes);
+    }
+
+    [TestMethod]
+    public void Analyze_ShouldRecognizeRawTsplBytePayloadWithBitmap()
+    {
+        var header = "SIZE 60 mm,40 mm\r\nBITMAP 10,20,2,4,0,";
+        var bitmapBytes = new byte[] { 0xFF, 0x00, 0xAA, 0x55, 0x11, 0x22, 0x33, 0x44 };
+        var footer = "\r\nPRINT 1\r\n";
+        var rawBytes = Encoding.ASCII.GetBytes(header).Concat(bitmapBytes).Concat(Encoding.ASCII.GetBytes(footer)).ToArray();
+        var analyzer = new TsplInputAnalyzer();
+
+        var analysis = analyzer.Analyze(rawBytes);
+
+        Assert.AreEqual(PrintInputKind.TsplCommands, analysis.Kind);
+        Assert.IsFalse(analysis.IsHexDump);
+        Assert.IsTrue(analysis.ShouldRenderGraphicPreview);
+        StringAssert.Contains(analysis.DecodedText, "SIZE 60 mm");
+        StringAssert.Contains(analysis.DecodedText, "BITMAP 10,20,2,4,0,");
+        CollectionAssert.AreEqual(rawBytes, analysis.PayloadBytes);
     }
 }

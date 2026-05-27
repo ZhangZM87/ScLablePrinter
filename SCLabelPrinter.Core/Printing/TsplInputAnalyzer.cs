@@ -90,7 +90,53 @@ public sealed class TsplInputAnalyzer : ITsplInputAnalyzer
             return CreateAnalysis(decodedBytes, decodedText, isHexDump: true);
         }
 
+        if (TryExtractTsplTextPrefix(rawBytes, out var tsplPrefix))
+        {
+            return CreateAnalysis(rawBytes, tsplPrefix, isHexDump: false);
+        }
+
         return CreateAnalysis(rawBytes, rawText, isHexDump: false);
+    }
+
+    /// <summary>
+    /// 从原始字节中提取 TSPL 命令文本前缀，避免将后续的 BITMAP 二进制载荷混入解码文本。
+    /// </summary>
+    private static bool TryExtractTsplTextPrefix(byte[] rawBytes, out string prefixText)
+    {
+        prefixText = string.Empty;
+        if (rawBytes.Length == 0)
+        {
+            return false;
+        }
+
+        var maxLength = Math.Min(rawBytes.Length, 8192);
+        var usefulLength = 0;
+        var invalidRun = 0;
+
+        for (var index = 0; index < maxLength; index++)
+        {
+            var value = rawBytes[index];
+            if (value == 0x09 || value == 0x0A || value == 0x0D || (value >= 0x20 && value <= 0x7E))
+            {
+                invalidRun = 0;
+                usefulLength = index + 1;
+                continue;
+            }
+
+            invalidRun++;
+            if (invalidRun >= 4)
+            {
+                break;
+            }
+        }
+
+        if (usefulLength == 0)
+        {
+            return false;
+        }
+
+        prefixText = TsplEncoding.GetString(rawBytes.AsSpan(0, usefulLength));
+        return LooksLikeTsplCommands(prefixText);
     }
 
     /// <summary>

@@ -40,7 +40,7 @@ public sealed class TsplTextPreviewLayoutPlanner : ITsplTextPreviewLayoutPlanner
 {
     private const double DotsPerMillimeter = 8.0;
     private const double MinPreviewWidthDots = 48.0;
-    private const double RightPaddingDots = 16.0;
+    private const double RightPaddingDots = 22.0;
     private const double CharacterWidthFactor = 0.62;
     private const double LineHeightFactor = 1.35;
     private const int MaxPreviewLines = 4;

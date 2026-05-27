@@ -148,7 +148,8 @@ public sealed class LabelCanvas : FrameworkElement
         var labelRect = CreateLabelRect(Template.Label, scale, origin);
         DrawLabelSurface(drawingContext, labelRect);
 
-        drawingContext.PushClip(new RectangleGeometry(labelRect, 12, 12));
+        var clipRect = CreateLabelClipRect(labelRect);
+        drawingContext.PushClip(new RectangleGeometry(clipRect, 12, 12));
         foreach (var element in Template.Elements)
         {
             DrawElement(drawingContext, element, scale, origin);
@@ -171,7 +172,7 @@ public sealed class LabelCanvas : FrameworkElement
         var mousePoint = e.GetPosition(this);
         var surface = CreateSurfaceRect();
         var (scale, origin) = CalculateScale(surface, Template.Label);
-        var hitElement = Template.Elements.AsEnumerable().Reverse().FirstOrDefault(el => IsPointOverElement(el, mousePoint, scale, origin));
+        var hitElement = GetHitElement(mousePoint, scale, origin);
         if (hitElement is null)
         {
             return;
@@ -214,7 +215,7 @@ public sealed class LabelCanvas : FrameworkElement
         var mousePoint = e.GetPosition(this);
         var surface = CreateSurfaceRect();
         var (scale, origin) = CalculateScale(surface, Template.Label);
-        var hitElement = Template.Elements.AsEnumerable().Reverse().FirstOrDefault(el => IsPointOverElement(el, mousePoint, scale, origin));
+        var hitElement = GetHitElement(mousePoint, scale, origin);
         if (hitElement is not TableElement tableElement)
         {
             return;
@@ -433,6 +434,19 @@ public sealed class LabelCanvas : FrameworkElement
     }
 
     /// <summary>
+    /// 生成用于裁剪内容的标签内边界，避免图形元素触碰或超出纸张边框。
+    /// </summary>
+    private static Rect CreateLabelClipRect(Rect labelRect)
+    {
+        var inset = 1.4;
+        return new Rect(
+            labelRect.X + inset,
+            labelRect.Y + inset,
+            Math.Max(1, labelRect.Width - inset * 2),
+            Math.Max(1, labelRect.Height - inset * 2));
+    }
+
+    /// <summary>
     /// 根据标签尺寸计算绘制缩放比例和原点位置。
     /// </summary>
     private static (double scale, Point origin) CalculateScale(Rect surface, LabelDefinition definition)
@@ -518,6 +532,34 @@ public sealed class LabelCanvas : FrameworkElement
         var bounds = GetElementBounds(element, scale, origin);
         bounds.Inflate(HitTestPadding, HitTestPadding);
         return bounds;
+    }
+
+    private LabelElement? GetHitElement(Point point, double scale, Point origin)
+    {
+        if (Template is null)
+        {
+            return null;
+        }
+
+        var candidates = Template.Elements
+            .Select((element, index) => new
+            {
+                Element = element,
+                Index = index,
+                Bounds = GetElementHitBounds(element, scale, origin),
+            })
+            .Where(item => item.Bounds.Contains(point))
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        return candidates
+            .OrderBy(item => item.Bounds.Width * item.Bounds.Height)
+            .ThenByDescending(item => item.Index)
+            .First().Element;
     }
 
     private Rect GetElementBounds(LabelElement element, double scale, Point origin)
@@ -608,8 +650,8 @@ public sealed class LabelCanvas : FrameworkElement
         var layout = TextPreviewLayoutPlanner.Plan(Template.Label, element);
         var anchor = new Point(origin.X + element.X * scale, origin.Y + element.Y * scale);
         var fontSize = Math.Max(8, layout.FontSizeDots * scale);
-        var maxWidth = Math.Max(1, layout.MaxWidthDots * scale);
-        var maxHeight = Math.Max(fontSize * 1.1, layout.MaxHeightDots * scale);
+        var maxWidth = Math.Max(1, layout.MaxWidthDots * scale - 2);
+        var maxHeight = Math.Max(fontSize * 1.1, layout.MaxHeightDots * scale - 2);
         var typeface = new Typeface("Microsoft YaHei UI");
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var formattedText = new FormattedText(

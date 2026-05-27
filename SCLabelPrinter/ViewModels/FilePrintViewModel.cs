@@ -125,13 +125,16 @@ public partial class FilePrintViewModel : ObservableObject
     /// </summary>
     private void UpdatePreviewFromAnalysis(PrintInputAnalysis analysis)
     {
-        if (analysis.Kind == PrintInputKind.TsplCommands && _tsplParser.TryParse(analysis.DecodedText, out var template))
+        if (analysis.Kind == PrintInputKind.TsplCommands)
         {
-            FilePreviewTemplate = template;
-            FilePreview = analysis.IsHexDump
-                ? "已识别十六进制 TSPL 并显示图形预览。"
-                : "已解析 TSPL 文档并显示图形预览。";
-            return;
+            if (_tsplParser.TryParse(analysis.DecodedText, out var template) || _tsplParser.TryParse(analysis.PayloadBytes, out template))
+            {
+                FilePreviewTemplate = template;
+                FilePreview = analysis.IsHexDump
+                    ? "已识别十六进制 TSPL 并显示图形预览。"
+                    : "已解析 TSPL 文档并显示图形预览。";
+                return;
+            }
         }
 
         FilePreviewTemplate = null;

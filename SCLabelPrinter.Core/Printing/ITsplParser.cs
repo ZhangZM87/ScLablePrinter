@@ -13,7 +13,17 @@ public interface ITsplParser
     bool TryParse(string tsplText, out LabelTemplateDocument? template);
 
     /// <summary>
+    /// 尝试解析 TSPL 原始字节流为标签模板文档。
+    /// </summary>
+    bool TryParse(byte[] tsplBytes, out LabelTemplateDocument? template);
+
+    /// <summary>
     /// 解析 TSPL 文本为标签模板文档，无法解析时抛出异常。
     /// </summary>
     LabelTemplateDocument Parse(string tsplText);
+
+    /// <summary>
+    /// 解析 TSPL 原始字节流为标签模板文档，无法解析时抛出异常。
+    /// </summary>
+    LabelTemplateDocument Parse(byte[] tsplBytes);
 }

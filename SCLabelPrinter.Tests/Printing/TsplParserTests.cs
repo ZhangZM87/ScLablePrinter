@@ -65,4 +65,24 @@ public sealed class TsplParserTests
         Assert.AreEqual(5, bitmap.Height);
         Assert.AreEqual(8, bitmap.Data.Length);
     }
+
+    [TestMethod]
+    public void Parse_ByteArray_ShouldSupportBitmapElementWithBinaryPayload()
+    {
+        var header = "SIZE 60 mm,40 mm\r\nBITMAP 10,20,2,4,0,";
+        var bitmapBytes = new byte[] { 0xFF, 0x00, 0xAA, 0x55, 0x01, 0x02, 0x03, 0x04 }; // 2*4 = 8 bytes
+        var footer = "\r\nPRINT 1\r\n";
+        var rawBytes = Encoding.ASCII.GetBytes(header).Concat(bitmapBytes).Concat(Encoding.ASCII.GetBytes(footer)).ToArray();
+
+        var parser = new TsplParser();
+        Assert.IsTrue(parser.TryParse(rawBytes, out var template));
+        Assert.IsNotNull(template);
+        Assert.AreEqual(1, template!.Elements.Count);
+        Assert.IsInstanceOfType(template.Elements[0], typeof(BitmapElement));
+
+        var bitmap = (BitmapElement)template.Elements[0];
+        Assert.AreEqual(16, bitmap.Width);
+        Assert.AreEqual(4, bitmap.Height);
+        CollectionAssert.AreEqual(bitmapBytes, bitmap.Data);
+    }
 }
