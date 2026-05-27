@@ -63,6 +63,9 @@ public sealed class TsplParser : ITsplParser
                 case "QRCODE":
                     ParseQrCode(document, arguments);
                     break;
+                case "BITMAP":
+                    ParseBitmap(document, arguments);
+                    break;
                 case "CLS":
                 case "PRINT":
                     break;
@@ -217,6 +220,61 @@ public sealed class TsplParser : ITsplParser
             Wide = ParseInt(args[7], 2),
             Content = TrimQuotes(args[8]),
         });
+    }
+
+    private static void ParseBitmap(LabelTemplateDocument document, string arguments)
+    {
+        var args = SplitArguments(arguments);
+        if (args.Length < 6)
+        {
+            return;
+        }
+
+        var widthBytes = ParseInt(args[2]);
+        var height = ParseInt(args[3]);
+        var bitmapData = ParseHexData(string.Join(string.Empty, args.Skip(5)));
+        if (bitmapData.Length == 0)
+        {
+            return;
+        }
+
+        document.Elements.Add(new BitmapElement
+        {
+            X = ParseInt(args[0]),
+            Y = ParseInt(args[1]),
+            Width = widthBytes * 8,
+            Height = height,
+            Mode = ParseInt(args[4], 0),
+            Data = bitmapData,
+        });
+    }
+
+    private static byte[] ParseHexData(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return Array.Empty<byte>();
+        }
+
+        var cleaned = new string(text.Where(ch => !char.IsWhiteSpace(ch)).ToArray());
+        if (cleaned.Length % 2 != 0)
+        {
+            cleaned = cleaned[..^1];
+        }
+
+        var bytes = new byte[cleaned.Length / 2];
+        for (var index = 0; index < bytes.Length; index++)
+        {
+            var token = cleaned.Substring(index * 2, 2);
+            if (!byte.TryParse(token, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
+            {
+                return Array.Empty<byte>();
+            }
+
+            bytes[index] = value;
+        }
+
+        return bytes;
     }
 
     private static void ParseQrCode(LabelTemplateDocument document, string arguments)

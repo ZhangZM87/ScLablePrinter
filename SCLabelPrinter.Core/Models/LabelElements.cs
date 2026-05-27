@@ -9,6 +9,7 @@ namespace SCLabelPrinter.Core.Models;
 [JsonDerivedType(typeof(TextElement), "text")]
 [JsonDerivedType(typeof(BarcodeElement), "barcode")]
 [JsonDerivedType(typeof(QrCodeElement), "qrcode")]
+[JsonDerivedType(typeof(BitmapElement), "bitmap")]
 [JsonDerivedType(typeof(BoxElement), "box")]
 [JsonDerivedType(typeof(LineElement), "line")]
 [JsonDerivedType(typeof(EraseElement), "erase")]
@@ -91,6 +92,28 @@ public sealed class QrCodeElement : LabelElement
     public override string ToString()
     {
         return $"二维码: {Content}";
+    }
+}
+
+/// <summary>
+/// 表示位图元素。
+/// </summary>
+public sealed class BitmapElement : LabelElement
+{
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    public int Mode { get; set; }
+
+    public byte[] Data { get; set; } = Array.Empty<byte>();
+
+    /// <summary>
+    /// 返回适合界面列表展示的位图元素摘要。
+    /// </summary>
+    public override string ToString()
+    {
+        return $"位图: {Width}×{Height}";
     }
 }
 

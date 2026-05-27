@@ -38,7 +38,36 @@ public static class TsplTextDecoder
             return false;
         }
 
-        var tokens = text.Split((char[])null!, StringSplitOptions.RemoveEmptyEntries);
+        var trimmed = text.Trim();
+        if (trimmed.Length == 0)
+        {
+            return false;
+        }
+
+        if (trimmed.All(ch => char.IsWhiteSpace(ch) || IsHexDigit(ch)))
+        {
+            var cleaned = new string(trimmed.Where(ch => !char.IsWhiteSpace(ch)).ToArray());
+            if (cleaned.Length % 2 != 0 || cleaned.Length > 40000)
+            {
+                return false;
+            }
+
+            bytes = new byte[cleaned.Length / 2];
+            for (var index = 0; index < bytes.Length; index++)
+            {
+                var token = cleaned.Substring(index * 2, 2);
+                if (!byte.TryParse(token, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
+                {
+                    return false;
+                }
+
+                bytes[index] = value;
+            }
+
+            return true;
+        }
+
+        var tokens = trimmed.Split((char[])null!, StringSplitOptions.RemoveEmptyEntries);
         if (tokens.Length == 0 || tokens.Length > 20000)
         {
             return false;
@@ -58,5 +87,10 @@ public static class TsplTextDecoder
 
         bytes = decoded;
         return true;
+    }
+
+    private static bool IsHexDigit(char ch)
+    {
+        return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f');
     }
 }

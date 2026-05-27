@@ -8,16 +8,27 @@
     mc:Ignorable="d">
     <Grid Margin="0,12,0,0">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1.65*" />
-            <ColumnDefinition Width="1.1*" />
+            <ColumnDefinition Width="2.15*" />
+            <ColumnDefinition Width="0.95*" />
         </Grid.ColumnDefinitions>
 
         <Border Margin="0,0,14,0" Style="{StaticResource CardBorderStyle}">
-            <StackPanel>
-                <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="直接打印文件" />
-                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="请选择要发送到打印机的文件" />
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-                <Grid Margin="0,0,0,12">
+                <TextBlock Grid.Row="0" Style="{StaticResource SectionTitleTextStyle}" Text="直接打印文件" />
+                <TextBlock Grid.Row="1" Style="{StaticResource CaptionTextStyle}" Text="请选择要发送到打印机的文件" />
+
+                <Grid Grid.Row="2" Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -38,7 +49,7 @@
                         Style="{StaticResource SecondaryButtonStyle}" />
                 </Grid>
 
-                <Grid Margin="0,0,0,20">
+                <Grid Grid.Row="3" Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -57,82 +68,144 @@
                 </Grid>
 
                 <Button
+                    Grid.Row="4"
                     Command="{Binding PrintCommand}"
                     Content="发送到打印机"
                     Style="{StaticResource ActionButtonStyle}" />
 
-                <TextBlock
-                    Margin="0,22,0,8"
-                    Style="{StaticResource CaptionTextStyle}"
-                    Text="文件预览" />
-                <Border
-                    Padding="10"
-                    Background="#FFF7F8FB"
-                    BorderBrush="#E7E0D7"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    MinHeight="260"
-                    Margin="0,0,0,20">
+                <Border Grid.Row="5"
+                        Padding="14"
+                        Background="#FFF7F8FB"
+                        BorderBrush="#E7E0D7"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        MinHeight="480"
+                        Margin="0,10,0,18">
                     <Grid>
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="220" />
-                            <RowDefinition Height="12" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="150" />
                         </Grid.RowDefinitions>
 
-                        <controls:LabelCanvas
-                            Grid.Row="0"
-                            Template="{Binding FilePreviewTemplate}"
-                            MinHeight="220"
-                            SnapsToDevicePixels="True" />
+                        <DockPanel Margin="0,0,0,12">
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Margin="0" Text="图形预览" DockPanel.Dock="Left" />
+                            <TextBlock Foreground="{StaticResource MutedTextBrush}" Text="可识别 TSPL 时显示纸张边界和版面" DockPanel.Dock="Right" />
+                        </DockPanel>
 
-                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                            <TextBox
-                                Text="{Binding FilePreview}"
-                                TextWrapping="Wrap"
-                                IsReadOnly="True"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Foreground="{StaticResource MutedTextBrush}"
-                                AcceptsReturn="True"
-                                MinHeight="80" />
-                        </ScrollViewer>
+                        <Border Grid.Row="1"
+                                Padding="12"
+                                Background="#F4E7D3"
+                                BorderBrush="#D7C5AF"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                MinHeight="340">
+                            <Grid>
+                                <controls:LabelCanvas
+                                    Template="{Binding FilePreviewTemplate}"
+                                    SnapsToDevicePixels="True" />
+
+                                <Border Padding="18"
+                                        Background="#CCF8EFE2"
+                                        CornerRadius="8"
+                                        IsHitTestVisible="False">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasTemplatePreview}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                MaxWidth="360">
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   Text="当前文件暂无图形预览" />
+                                        <TextBlock Margin="0,8,0,0"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   Text="二进制打印包会显示摘要；可识别的 TSPL 或十六进制 TSPL 会在这里显示版面。"
+                                                   TextAlignment="Center"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Grid.Row="2"
+                                   Margin="0,14,0,8"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   Text="文本 / 二进制摘要" />
+
+                        <Border Grid.Row="3"
+                                Background="#FFFDFCFA"
+                                BorderBrush="#EEE5D9"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <TextBox
+                                    Margin="12"
+                                    Padding="0"
+                                    Text="{Binding FilePreview}"
+                                    TextWrapping="Wrap"
+                                    IsReadOnly="True"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Foreground="{StaticResource MutedTextBrush}"
+                                    AcceptsReturn="True"
+                                    MinHeight="110" />
+                            </ScrollViewer>
+                        </Border>
                     </Grid>
                 </Border>
 
-                <TextBlock
-                    Margin="0,0,0,8"
-                    Style="{StaticResource CaptionTextStyle}"
-                    Text="支持格式" />
-                <Border
-                    Padding="14"
-                    Background="#FFF7F8FB"
-                    BorderBrush="#E7E0D7"
-                    BorderThickness="1"
-                    CornerRadius="8">
+                <TextBlock Grid.Row="6"
+                           Margin="0,0,0,8"
+                           Style="{StaticResource CaptionTextStyle}"
+                           Text="支持格式" />
+
+                <Border Grid.Row="7"
+                        Padding="14"
+                        Background="#FFF7F8FB"
+                        BorderBrush="#E7E0D7"
+                        BorderThickness="1"
+                        CornerRadius="8">
                     <TextBlock
                         Foreground="{StaticResource MutedTextBrush}"
                         LineHeight="22"
-                        Text=".sclabel 会先生成 TSPL 指令；.txt 按 TSPL 文本发送；.prn / .bin 直接按二进制发送。"
+                        Text=".sclabel 会先生成 TSPL 指令；可识别的 .txt 会按 TSPL 或十六进制 TSPL 发送；识别为原始打印包的 .txt/.prn/.bin 会按二进制直发。"
                         TextWrapping="Wrap" />
                 </Border>
-            </StackPanel>
+            </Grid>
         </Border>
 
         <Border
             Grid.Column="1"
-            VerticalAlignment="Top"
+            VerticalAlignment="Stretch"
             Style="{StaticResource CardBorderStyle}">
-            <StackPanel>
-                <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="发送状态" />
-                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="当前打印任务摘要" />
-                <Border
-                    Margin="0,0,0,16"
-                    Padding="14"
-                    Background="#FFF7F8FB"
-                    BorderBrush="#E7E0D7"
-                    BorderThickness="1"
-                    CornerRadius="8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Style="{StaticResource SectionTitleTextStyle}" Text="发送状态" />
+                <TextBlock Grid.Row="1" Style="{StaticResource CaptionTextStyle}" Text="当前打印任务摘要" />
+                <Border Grid.Row="2"
+                        Margin="0,0,0,16"
+                        Padding="14"
+                        Background="#FFF7F8FB"
+                        BorderBrush="#E7E0D7"
+                        BorderThickness="1"
+                        CornerRadius="8">
                     <TextBlock
                         Foreground="{StaticResource MutedTextBrush}"
                         LineHeight="22"
@@ -140,19 +213,19 @@
                         TextWrapping="Wrap" />
                 </Border>
 
-                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="打印进度" />
-                <Border
-                    Padding="14"
-                    Background="#FFF7F8FB"
-                    BorderBrush="#E7E0D7"
-                    BorderThickness="1"
-                    CornerRadius="8">
+                <TextBlock Grid.Row="3" Style="{StaticResource CaptionTextStyle}" Text="打印进度" />
+                <Border Grid.Row="4"
+                        Padding="14"
+                        Background="#FFF7F8FB"
+                        BorderBrush="#E7E0D7"
+                        BorderThickness="1"
+                        CornerRadius="8">
                     <TextBlock
                         FontSize="18"
                         FontWeight="SemiBold"
                         Text="{Binding ProgressMessage}" />
                 </Border>
-            </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

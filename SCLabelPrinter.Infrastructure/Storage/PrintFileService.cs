@@ -11,14 +11,16 @@ public sealed class PrintFileService : IPrintFileService
 {
     private readonly ILabelTemplateStorageService _templateStorageService;
     private readonly TsplGenerator _tsplGenerator;
+    private readonly ITsplInputAnalyzer _inputAnalyzer;
 
     /// <summary>
     /// 创建打印文件服务。
     /// </summary>
-    public PrintFileService(ILabelTemplateStorageService templateStorageService, TsplGenerator tsplGenerator)
+    public PrintFileService(ILabelTemplateStorageService templateStorageService, TsplGenerator tsplGenerator, ITsplInputAnalyzer inputAnalyzer)
     {
         _templateStorageService = templateStorageService;
         _tsplGenerator = tsplGenerator;
+        _inputAnalyzer = inputAnalyzer;
     }
 
     /// <summary>
@@ -54,27 +56,23 @@ public sealed class PrintFileService : IPrintFileService
     }
 
     /// <summary>
-    /// 读取 TSPL 文本文件并转换为 GB18030 编码的数据载荷。
+    /// 读取文本文件并根据内容特征决定发送文本指令、十六进制解码内容或原始二进制。
     /// </summary>
-    private static async Task<PrintPayload> LoadTextPayloadAsync(string path, CancellationToken cancellationToken)
+    private async Task<PrintPayload> LoadTextPayloadAsync(string path, CancellationToken cancellationToken)
     {
         var rawBytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
-        var rawText = Encoding.GetEncoding(54936).GetString(rawBytes);
-        if (TsplTextDecoder.TryDecodeHexDump(rawText, out var decodedBytes))
-        {
-            return new PrintPayload
-            {
-                SourcePath = path,
-                ContentType = "text-hex",
-                Data = decodedBytes,
-            };
-        }
+        var analysis = _inputAnalyzer.Analyze(rawBytes);
+        var contentType = analysis.Kind == PrintInputKind.Binary
+            ? "binary"
+            : analysis.IsHexDump
+                ? "text-hex"
+                : "text";
 
         return new PrintPayload
         {
             SourcePath = path,
-            ContentType = "text",
-            Data = Encoding.GetEncoding(54936).GetBytes(rawText),
+            ContentType = contentType,
+            Data = analysis.PayloadBytes,
         };
     }
 

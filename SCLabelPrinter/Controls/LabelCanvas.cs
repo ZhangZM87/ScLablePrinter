@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using SCLabelPrinter.Core.Models;
+using SCLabelPrinter.Core.Printing;
 using ZXing;
 using ZXing.Common;
 using ZXing.QrCode.Internal;
@@ -20,9 +21,19 @@ public sealed class LabelCanvas : FrameworkElement
 {
     private const double DotsPerMillimeter = 8.0;
     private const int HitTestPadding = 8;
+    private static readonly ITsplTextPreviewLayoutPlanner TextPreviewLayoutPlanner = new TsplTextPreviewLayoutPlanner();
+    private readonly Brush _canvasBackdropBrush = new SolidColorBrush(Color.FromRgb(0xF3, 0xE7, 0xD4));
+    private readonly Brush _workspaceBrush = new SolidColorBrush(Color.FromRgb(0xEC, 0xDE, 0xC8));
     private readonly Brush _backgroundBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFC));
     private readonly Brush _eraseBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFC));
     private readonly Pen _borderPen = new(new SolidColorBrush(Color.FromRgb(0xD9, 0xD2, 0xC3)), 1);
+    private readonly Pen _workspaceBorderPen = new(new SolidColorBrush(Color.FromRgb(0xD0, 0xBF, 0xA5)), 1);
+    private readonly Pen _paperBorderPen = new(new SolidColorBrush(Color.FromRgb(0xB7, 0xA7, 0x92)), 1.4);
+    private readonly Pen _paperGuidePen = new(new SolidColorBrush(Color.FromArgb(0x82, 0xC7, 0xB8, 0xA2)), 0.9)
+    {
+        DashStyle = new DashStyle(new double[] { 4, 3 }, 0),
+    };
+    private readonly Brush _paperShadowBrush = new SolidColorBrush(Color.FromArgb(0x24, 0x2A, 0x1D, 0x12));
     private readonly Brush _foregroundBrush = Brushes.Black;
     private readonly Pen _selectionPen = new(new SolidColorBrush(Color.FromRgb(0x1D, 0x4E, 0x8E)), 1)
     {
@@ -123,7 +134,7 @@ public sealed class LabelCanvas : FrameworkElement
         base.OnRender(drawingContext);
 
         var bounds = new Rect(new Point(0, 0), RenderSize);
-        drawingContext.DrawRectangle(new SolidColorBrush(Color.FromRgb(0xF7, 0xF1, 0xE3)), null, bounds);
+        drawingContext.DrawRectangle(_canvasBackdropBrush, null, bounds);
 
         if (Template is null)
         {
@@ -131,13 +142,18 @@ public sealed class LabelCanvas : FrameworkElement
         }
 
         var surface = CreateSurfaceRect();
-        drawingContext.DrawRoundedRectangle(_backgroundBrush, _borderPen, surface, 16, 16);
+        DrawWorkspaceSurface(drawingContext, surface);
 
         var (scale, origin) = CalculateScale(surface, Template.Label);
+        var labelRect = CreateLabelRect(Template.Label, scale, origin);
+        DrawLabelSurface(drawingContext, labelRect);
+
+        drawingContext.PushClip(new RectangleGeometry(labelRect, 12, 12));
         foreach (var element in Template.Elements)
         {
             DrawElement(drawingContext, element, scale, origin);
         }
+        drawingContext.Pop();
     }
 
     /// <summary>
@@ -377,6 +393,46 @@ public sealed class LabelCanvas : FrameworkElement
     }
 
     /// <summary>
+    /// 绘制标签预览外层的工作区背景和边框。
+    /// </summary>
+    private void DrawWorkspaceSurface(DrawingContext drawingContext, Rect surface)
+    {
+        drawingContext.DrawRoundedRectangle(_workspaceBrush, _workspaceBorderPen, surface, 18, 18);
+    }
+
+    /// <summary>
+    /// 绘制真实标签纸张边界，增强编辑态的纸张感和可视化边界。
+    /// </summary>
+    private void DrawLabelSurface(DrawingContext drawingContext, Rect labelRect)
+    {
+        if (labelRect.Width <= 0 || labelRect.Height <= 0)
+        {
+            return;
+        }
+
+        var shadowRect = new Rect(labelRect.X + 6, labelRect.Y + 6, labelRect.Width, labelRect.Height);
+        drawingContext.DrawRoundedRectangle(_paperShadowBrush, null, shadowRect, 14, 14);
+        drawingContext.DrawRoundedRectangle(_backgroundBrush, _paperBorderPen, labelRect, 14, 14);
+
+        var inset = Math.Min(12, Math.Min(labelRect.Width, labelRect.Height) / 8);
+        if (inset > 4)
+        {
+            var guideRect = Rect.Inflate(labelRect, -inset, -inset);
+            drawingContext.DrawRoundedRectangle(null, _paperGuidePen, guideRect, 10, 10);
+        }
+    }
+
+    /// <summary>
+    /// 根据实际标签尺寸计算纸张在预览控件中的可视区域。
+    /// </summary>
+    private static Rect CreateLabelRect(LabelDefinition definition, double scale, Point origin)
+    {
+        var widthDots = definition.Unit == LabelUnit.Millimeter ? definition.Width * DotsPerMillimeter : definition.Width;
+        var heightDots = definition.Unit == LabelUnit.Millimeter ? definition.Height * DotsPerMillimeter : definition.Height;
+        return new Rect(origin.X, origin.Y, Math.Max(1, widthDots * scale), Math.Max(1, heightDots * scale));
+    }
+
+    /// <summary>
     /// 根据标签尺寸计算绘制缩放比例和原点位置。
     /// </summary>
     private static (double scale, Point origin) CalculateScale(Rect surface, LabelDefinition definition)
@@ -395,7 +451,7 @@ public sealed class LabelCanvas : FrameworkElement
         return (scale, new Point(offsetX, offsetY));
     }
 
-    private static int GetMaxDragCoordinate(LabelElement element, LabelDefinition definition, double scale, bool isHorizontal)
+    private int GetMaxDragCoordinate(LabelElement element, LabelDefinition definition, double scale, bool isHorizontal)
     {
         var widthDots = definition.Unit == LabelUnit.Millimeter ? definition.Width * DotsPerMillimeter : definition.Width;
         var heightDots = definition.Unit == LabelUnit.Millimeter ? definition.Height * DotsPerMillimeter : definition.Height;
@@ -421,6 +477,9 @@ public sealed class LabelCanvas : FrameworkElement
                 break;
             case QrCodeElement qrCodeElement:
                 DrawQrCodeElement(drawingContext, qrCodeElement, scale, origin);
+                break;
+            case BitmapElement bitmapElement:
+                DrawBitmapElement(drawingContext, bitmapElement, scale, origin);
                 break;
             case BoxElement boxElement:
                 DrawBoxElement(drawingContext, boxElement, scale, origin);
@@ -454,14 +513,14 @@ public sealed class LabelCanvas : FrameworkElement
         return hitBounds.Contains(point);
     }
 
-    private static Rect GetElementHitBounds(LabelElement element, double scale, Point origin)
+    private Rect GetElementHitBounds(LabelElement element, double scale, Point origin)
     {
         var bounds = GetElementBounds(element, scale, origin);
         bounds.Inflate(HitTestPadding, HitTestPadding);
         return bounds;
     }
 
-    private static Rect GetElementBounds(LabelElement element, double scale, Point origin)
+    private Rect GetElementBounds(LabelElement element, double scale, Point origin)
     {
         return element switch
         {
@@ -471,6 +530,7 @@ public sealed class LabelCanvas : FrameworkElement
             BoxElement boxElement => GetBoxBounds(boxElement, scale, origin),
             LineElement lineElement => new Rect(origin.X + lineElement.X * scale, origin.Y + lineElement.Y * scale, Math.Max(1, lineElement.Width * scale), Math.Max(1, lineElement.Height * scale)),
             EraseElement eraseElement => new Rect(origin.X + eraseElement.X * scale, origin.Y + eraseElement.Y * scale, Math.Max(1, eraseElement.Width * scale), Math.Max(1, eraseElement.Height * scale)),
+            BitmapElement bitmapElement => new Rect(origin.X + bitmapElement.X * scale, origin.Y + bitmapElement.Y * scale, Math.Max(1, bitmapElement.Width * scale), Math.Max(1, bitmapElement.Height * scale)),
             TableElement tableElement => new Rect(origin.X + tableElement.X * scale, origin.Y + tableElement.Y * scale, Math.Max(1, tableElement.TotalWidth * scale), Math.Max(1, tableElement.Rows * tableElement.RowHeight * scale)),
             _ => new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, 1, 1),
         };
@@ -502,11 +562,15 @@ public sealed class LabelCanvas : FrameworkElement
         return new Point(center.X + dx * cos - dy * sin, center.Y + dx * sin + dy * cos);
     }
 
-    private static Rect GetTextBounds(TextElement element, double scale, Point origin)
+    private Rect GetTextBounds(TextElement element, double scale, Point origin)
     {
-        var width = Math.Max(20, MapTsplFontSize(element.Font) * scale * element.XScale * element.Content.Length * 0.5);
-        var height = Math.Max(16, MapTsplFontSize(element.Font) * scale * element.YScale);
-        return new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, width, height);
+        var definition = Template?.Label ?? new LabelDefinition();
+        var layout = TextPreviewLayoutPlanner.Plan(definition, element);
+        return new Rect(
+            origin.X + element.X * scale,
+            origin.Y + element.Y * scale,
+            Math.Max(1, layout.MaxWidthDots * scale),
+            Math.Max(1, layout.MaxHeightDots * scale));
     }
 
     private static Rect GetBarcodeBounds(BarcodeElement element, double scale, Point origin)
@@ -536,19 +600,38 @@ public sealed class LabelCanvas : FrameworkElement
     /// </summary>
     private void DrawTextElement(DrawingContext drawingContext, TextElement element, double scale, Point origin)
     {
+        if (Template is null)
+        {
+            return;
+        }
+
+        var layout = TextPreviewLayoutPlanner.Plan(Template.Label, element);
         var anchor = new Point(origin.X + element.X * scale, origin.Y + element.Y * scale);
+        var fontSize = Math.Max(8, layout.FontSizeDots * scale);
+        var maxWidth = Math.Max(1, layout.MaxWidthDots * scale);
+        var maxHeight = Math.Max(fontSize * 1.1, layout.MaxHeightDots * scale);
+        var typeface = new Typeface("Microsoft YaHei UI");
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var formattedText = new FormattedText(
-            element.Content,
+            string.IsNullOrEmpty(element.Content) ? " " : element.Content,
             CultureInfo.CurrentUICulture,
             FlowDirection.LeftToRight,
-            new Typeface("Microsoft YaHei UI"),
-            Math.Max(12, MapTsplFontSize(element.Font) * scale * element.YScale),
+            typeface,
+            fontSize,
             _foregroundBrush,
-            VisualTreeHelper.GetDpi(this).PixelsPerDip);
+            pixelsPerDip)
+        {
+            MaxTextWidth = maxWidth,
+            MaxTextHeight = maxHeight,
+            Trimming = TextTrimming.CharacterEllipsis,
+        };
+        var clipRect = new Rect(anchor.X, anchor.Y, maxWidth, maxHeight);
 
         DrawWithRotation(drawingContext, element.Rotation, anchor, () =>
         {
+            drawingContext.PushClip(new RectangleGeometry(clipRect, 4, 4));
             drawingContext.DrawText(formattedText, anchor);
+            drawingContext.Pop();
         });
     }
 
@@ -644,6 +727,24 @@ public sealed class LabelCanvas : FrameworkElement
         DrawWithRotation(drawingContext, element.Rotation, rect.TopLeft, () =>
         {
             drawingContext.DrawRectangle(_eraseBrush, null, rect);
+        });
+    }
+
+    /// <summary>
+    /// 绘制位图元素预览。
+    /// </summary>
+    private void DrawBitmapElement(DrawingContext drawingContext, BitmapElement element, double scale, Point origin)
+    {
+        var startX = origin.X + element.X * scale;
+        var startY = origin.Y + element.Y * scale;
+        var width = Math.Max(1, element.Width * scale);
+        var height = Math.Max(1, element.Height * scale);
+        var image = CreateBitmapPreview(element);
+        var imageRect = new Rect(startX, startY, width, height);
+
+        DrawWithRotation(drawingContext, element.Rotation, new Point(startX, startY), () =>
+        {
+            drawingContext.DrawImage(image, imageRect);
         });
     }
 
@@ -764,6 +865,176 @@ public sealed class LabelCanvas : FrameworkElement
         drawingContext.PushTransform(new RotateTransform(rotation % 360, anchor.X, anchor.Y));
         drawAction();
         drawingContext.Pop();
+    }
+
+    /// <summary>
+    /// 估算条码在预览画布上的实际宽度，尽量贴近打印时的占位尺寸。
+    /// </summary>
+    private static string[] WrapTextLines(string text, double maxWidth, Typeface typeface, double fontSize, double pixelsPerDip, int maxLines)
+    {
+        if (string.IsNullOrEmpty(text) || maxWidth <= 0)
+        {
+            return new[] { string.Empty };
+        }
+
+        var lines = new List<string>();
+        var currentLine = string.Empty;
+        var words = text.Split(' ');
+
+        foreach (var word in words)
+        {
+            var candidate = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
+            var formatted = new FormattedText(
+                candidate,
+                CultureInfo.CurrentUICulture,
+                FlowDirection.LeftToRight,
+                typeface,
+                fontSize,
+                Brushes.Black,
+                pixelsPerDip);
+
+            if (formatted.Width <= maxWidth)
+            {
+                currentLine = candidate;
+                continue;
+            }
+
+            if (!string.IsNullOrEmpty(currentLine))
+            {
+                lines.Add(currentLine);
+                currentLine = word;
+            }
+            else
+            {
+                lines.AddRange(BreakWordToLines(word, maxWidth, typeface, fontSize, pixelsPerDip));
+                currentLine = string.Empty;
+            }
+
+            if (lines.Count >= maxLines)
+            {
+                break;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(currentLine) && lines.Count < maxLines)
+        {
+            lines.Add(currentLine);
+        }
+
+        if (lines.Count == 0)
+        {
+            lines.Add(string.Empty);
+        }
+
+        if (lines.Count > maxLines)
+        {
+            lines = lines.Take(maxLines).ToList();
+        }
+
+        if (lines.Count == maxLines)
+        {
+            lines[^1] = TruncateLineToWidth(lines[^1], maxWidth, typeface, fontSize, pixelsPerDip);
+        }
+
+        return lines.ToArray();
+    }
+
+    private static string TruncateLineToWidth(string text, double maxWidth, Typeface typeface, double fontSize, double pixelsPerDip)
+    {
+        const string ellipsis = "...";
+        var candidate = text;
+        while (!string.IsNullOrEmpty(candidate))
+        {
+            var formatted = new FormattedText(
+                candidate + ellipsis,
+                CultureInfo.CurrentUICulture,
+                FlowDirection.LeftToRight,
+                typeface,
+                fontSize,
+                Brushes.Black,
+                pixelsPerDip);
+
+            if (formatted.Width <= maxWidth)
+            {
+                return candidate + ellipsis;
+            }
+
+            candidate = candidate[..^1];
+        }
+
+        return ellipsis;
+    }
+
+    private static IEnumerable<string> BreakWordToLines(string word, double maxWidth, Typeface typeface, double fontSize, double pixelsPerDip)
+    {
+        var lines = new List<string>();
+        var builder = string.Empty;
+
+        foreach (var ch in word)
+        {
+            var candidate = builder + ch;
+            var formatted = new FormattedText(
+                candidate,
+                CultureInfo.CurrentUICulture,
+                FlowDirection.LeftToRight,
+                typeface,
+                fontSize,
+                Brushes.Black,
+                pixelsPerDip);
+
+            if (formatted.Width > maxWidth && builder.Length > 0)
+            {
+                lines.Add(builder);
+                builder = ch.ToString();
+                continue;
+            }
+
+            builder = candidate;
+        }
+
+        if (!string.IsNullOrEmpty(builder))
+        {
+            lines.Add(builder);
+        }
+
+        return lines;
+    }
+
+    private static BitmapSource CreateBitmapPreview(BitmapElement element)
+    {
+        var width = Math.Max(1, element.Width);
+        var height = Math.Max(1, element.Height);
+        var bytesPerRow = Math.Max(1, (width + 7) / 8);
+        var pixels = new byte[width * height * 4];
+
+        for (var row = 0; row < height; row++)
+        {
+            for (var col = 0; col < width; col++)
+            {
+                var byteIndex = row * bytesPerRow + (col / 8);
+                var bitMask = (byte)(0x80 >> (col % 8));
+                var isBlack = byteIndex < element.Data.Length && (element.Data[byteIndex] & bitMask) != 0;
+                var pixelIndex = (row * width + col) * 4;
+                if (isBlack)
+                {
+                    pixels[pixelIndex] = 0x00;
+                    pixels[pixelIndex + 1] = 0x00;
+                    pixels[pixelIndex + 2] = 0x00;
+                    pixels[pixelIndex + 3] = 0xFF;
+                }
+                else
+                {
+                    pixels[pixelIndex] = 0xFF;
+                    pixels[pixelIndex + 1] = 0xFF;
+                    pixels[pixelIndex + 2] = 0xFF;
+                    pixels[pixelIndex + 3] = 0xFF;
+                }
+            }
+        }
+
+        var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4);
+        bitmap.Freeze();
+        return bitmap;
     }
 
     /// <summary>

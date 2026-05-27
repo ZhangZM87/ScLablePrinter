@@ -1,6 +1,5 @@
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -22,19 +21,21 @@ public partial class FilePrintViewModel : ObservableObject
     private readonly IFileDialogService _fileDialogService;
     private readonly IUserNotificationService _notificationService;
     private readonly ILabelTemplateStorageService _labelTemplateStorageService;
+    private readonly ITsplInputAnalyzer _inputAnalyzer;
     private readonly ITsplParser _tsplParser;
     private readonly StatusCenter _statusCenter;
 
     /// <summary>
     /// 创建文件打印视图模型。
     /// </summary>
-    public FilePrintViewModel(IPrintFileService printFileService, IPrinterService printerService, IFileDialogService fileDialogService, IUserNotificationService notificationService, ILabelTemplateStorageService labelTemplateStorageService, ITsplParser tsplParser, StatusCenter statusCenter)
+    public FilePrintViewModel(IPrintFileService printFileService, IPrinterService printerService, IFileDialogService fileDialogService, IUserNotificationService notificationService, ILabelTemplateStorageService labelTemplateStorageService, ITsplInputAnalyzer inputAnalyzer, ITsplParser tsplParser, StatusCenter statusCenter)
     {
         _printFileService = printFileService;
         _printerService = printerService;
         _fileDialogService = fileDialogService;
         _notificationService = notificationService;
         _labelTemplateStorageService = labelTemplateStorageService;
+        _inputAnalyzer = inputAnalyzer;
         _tsplParser = tsplParser;
         _statusCenter = statusCenter;
     }
@@ -101,24 +102,11 @@ public partial class FilePrintViewModel : ObservableObject
                 FilePreviewTemplate = template;
                 FilePreview = "已解析标签模板，图形预览已加载。";
             }
-            else if (extension == ".txt")
+            else if (extension is ".txt" or ".prn" or ".bin")
             {
-                var text = await DecodeTextFileAsync(path);
-                if (_tsplParser.TryParse(text, out var template))
-                {
-                    FilePreviewTemplate = template;
-                    FilePreview = "已解析 TSPL 文档并显示图形预览。";
-                }
-                else
-                {
-                    const int maxLength = 3000;
-                    FilePreview = text.Length > maxLength ? text[..maxLength] + "\r\n...（已截断）" : text;
-                }
-            }
-            else if (extension is ".prn" or ".bin")
-            {
-                var bytes = await File.ReadAllBytesAsync(path);
-                FilePreview = $"二进制文件: {bytes.Length} 字节\r\n" + string.Join(" ", bytes.Take(128).Select(b => b.ToString("X2")));
+                var rawBytes = await File.ReadAllBytesAsync(path);
+                var analysis = _inputAnalyzer.Analyze(rawBytes);
+                UpdatePreviewFromAnalysis(analysis);
             }
             else
             {
@@ -132,10 +120,45 @@ public partial class FilePrintViewModel : ObservableObject
         }
     }
 
-    private static async Task<string> DecodeTextFileAsync(string path)
+    /// <summary>
+    /// 根据统一分析结果刷新文件预览内容与图形模板。
+    /// </summary>
+    private void UpdatePreviewFromAnalysis(PrintInputAnalysis analysis)
     {
-        var rawBytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
-        return TsplTextDecoder.DecodeTextFileBytes(rawBytes);
+        if (analysis.Kind == PrintInputKind.TsplCommands && _tsplParser.TryParse(analysis.DecodedText, out var template))
+        {
+            FilePreviewTemplate = template;
+            FilePreview = analysis.IsHexDump
+                ? "已识别十六进制 TSPL 并显示图形预览。"
+                : "已解析 TSPL 文档并显示图形预览。";
+            return;
+        }
+
+        FilePreviewTemplate = null;
+        FilePreview = analysis.Kind switch
+        {
+            PrintInputKind.Binary => BuildBinaryPreviewSummary(analysis.PayloadBytes, analysis.IsHexDump),
+            _ => BuildTextPreviewSummary(analysis.DecodedText),
+        };
+    }
+
+    /// <summary>
+    /// 为不可视化的二进制内容生成清晰的摘要说明，避免错误渲染成乱码预览。
+    /// </summary>
+    private static string BuildBinaryPreviewSummary(byte[] payloadBytes, bool isHexDump)
+    {
+        var previewBytes = payloadBytes.Length > 128 ? payloadBytes[..128] : payloadBytes;
+        var sourceHint = isHexDump ? "检测到十六进制转储形式的原始打印包，当前不生成图形预览。" : "检测到原始二进制打印包，当前不生成图形预览。";
+        return $"{sourceHint}\r\n文件大小: {payloadBytes.Length} 字节\r\n摘要: {string.Join(" ", previewBytes.Select(b => b.ToString("X2")))}";
+    }
+
+    /// <summary>
+    /// 对普通文本预览内容进行长度裁剪，避免大文件撑爆摘要区。
+    /// </summary>
+    private static string BuildTextPreviewSummary(string text)
+    {
+        const int maxLength = 3000;
+        return text.Length > maxLength ? text[..maxLength] + "\r\n...（已截断）" : text;
     }
 
     /// <summary>
