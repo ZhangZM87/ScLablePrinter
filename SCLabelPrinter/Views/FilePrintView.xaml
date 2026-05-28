@@ -102,9 +102,16 @@
                                 CornerRadius="10"
                                 MinHeight="340">
                             <Grid>
-                                <controls:LabelCanvas
-                                    Template="{Binding FilePreviewTemplate}"
-                                    SnapsToDevicePixels="True" />
+                                <ScrollViewer
+                                    CanContentScroll="False"
+                                    HorizontalScrollBarVisibility="Auto"
+                                    VerticalScrollBarVisibility="Auto">
+                                    <controls:LabelCanvas
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        Template="{Binding FilePreviewTemplate}"
+                                        SnapsToDevicePixels="True" />
+                                </ScrollViewer>
 
                                 <Border Padding="18"
                                         Background="#CCF8EFE2"

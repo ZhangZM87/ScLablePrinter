@@ -1,11 +1,12 @@
-<UserControl x:Class="SCLabelPrinter.Views.EditorView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:controls="clr-namespace:SCLabelPrinter.Controls"
-             xmlns:models="clr-namespace:SCLabelPrinter.Core.Models;assembly=SCLabelPrinter.Core"
-             mc:Ignorable="d">
+<UserControl
+    x:Class="SCLabelPrinter.Views.EditorView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="clr-namespace:SCLabelPrinter.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="clr-namespace:SCLabelPrinter.Core.Models;assembly=SCLabelPrinter.Core"
+    mc:Ignorable="d">
     <Grid Margin="0,8,0,0">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="250" />
@@ -13,7 +14,7 @@
             <ColumnDefinition Width="340" />
         </Grid.ColumnDefinitions>
 
-        <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,12,0">
+        <Border Margin="0,0,12,0" Style="{StaticResource CardBorderStyle}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="工具箱" />
@@ -21,21 +22,41 @@
                         <Button Command="{Binding AddTextElementCommand}" Content="文本" />
                         <Button Command="{Binding AddBarcodeElementCommand}" Content="条码" />
                         <Button Command="{Binding AddQrCodeElementCommand}" Content="二维码" />
-                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddBoxElementCommand}" Content="矩形框" />
-                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddLineElementCommand}" Content="线条" />
-                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddEraseElementCommand}" Content="挖空" />
-                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding AddTableElementCommand}" Content="表格" />
+                        <Button
+                            Command="{Binding AddBoxElementCommand}"
+                            Content="矩形框"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            Command="{Binding AddLineElementCommand}"
+                            Content="线条"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            Command="{Binding AddEraseElementCommand}"
+                            Content="挖空"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            Command="{Binding AddTableElementCommand}"
+                            Content="表格"
+                            Style="{StaticResource SecondaryButtonStyle}" />
                     </WrapPanel>
 
-                    <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionTitleTextStyle}" Text="元素列表" />
-                    <ListBox Height="240"
-                             ItemsSource="{Binding Elements}"
-                             SelectedItem="{Binding SelectedElement}" />
-                    <Button Style="{StaticResource ActionButtonStyle}"
-                            Command="{Binding RemoveSelectedElementCommand}"
-                            Content="删除选中元素" />
+                    <TextBlock
+                        Margin="0,16,0,0"
+                        Style="{StaticResource SectionTitleTextStyle}"
+                        Text="元素列表" />
+                    <ListBox
+                        Height="240"
+                        ItemsSource="{Binding Elements}"
+                        SelectedItem="{Binding SelectedElement}" />
+                    <Button
+                        Command="{Binding RemoveSelectedElementCommand}"
+                        Content="删除选中元素"
+                        Style="{StaticResource ActionButtonStyle}" />
 
-                    <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionTitleTextStyle}" Text="最近文件" />
+                    <TextBlock
+                        Margin="0,16,0,0"
+                        Style="{StaticResource SectionTitleTextStyle}"
+                        Text="最近文件" />
                     <ListBox Height="160" ItemsSource="{Binding RecentFiles}" />
                 </StackPanel>
             </ScrollViewer>
@@ -48,56 +69,131 @@
                 <RowDefinition Height="1.1*" />
             </Grid.RowDefinitions>
 
-            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,0">
+            <Border Margin="0,0,0,0" Style="{StaticResource CardBorderStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <DockPanel>
-                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="标签预览" DockPanel.Dock="Left" />
-                        <TextBlock Foreground="{StaticResource MutedTextBrush}" Text="预览强调布局与内容，不替代最终实物校准。" DockPanel.Dock="Right" />
+                        <TextBlock
+                            DockPanel.Dock="Left"
+                            Style="{StaticResource SectionTitleTextStyle}"
+                            Text="标签预览" />
+                        <TextBlock
+                            DockPanel.Dock="Right"
+                            Foreground="{StaticResource MutedTextBrush}"
+                            Text="预览强调布局与内容，不替代最终实物校准。" />
                     </DockPanel>
-                    <Border Grid.Row="1"
-                            Margin="0,4,0,0"
-                            Padding="12"
-                            Background="#F4E7D3"
-                            BorderBrush="#D7C5AF"
-                            BorderThickness="1"
-                            CornerRadius="10">
-                        <controls:LabelCanvas Template="{Binding PreviewTemplate}"
-                                              SelectedElementId="{Binding SelectedElementId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                              ElementSelectedCommand="{Binding SelectElementByIdCommand}"
-                                              ElementDragStartedCommand="{Binding BeginSelectedElementMoveCommand}"
-                                              ElementMovedCommand="{Binding MoveSelectedElementCommand}"
-                                              TableCellContextMenuCommand="{Binding TableCellContextMenuCommand}"
-                                              SnapsToDevicePixels="True" />
+                    <Border
+                        Grid.Row="1"
+                        Margin="0,4,0,0"
+                        Padding="12"
+                        Background="#F4E7D3"
+                        BorderBrush="#D7C5AF"
+                        BorderThickness="1"
+                        CornerRadius="10">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel
+                                Grid.Row="0"
+                                Margin="0,0,0,8"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal">
+                                <TextBlock
+                                    Margin="0,0,8,0"
+                                    VerticalAlignment="Center"
+                                    Style="{StaticResource CaptionTextStyle}"
+                                    Text="预览缩放" />
+                                <Button
+                                    Width="28"
+                                    Margin="0,0,8,0"
+                                    Command="{Binding ZoomOutCommand}"
+                                    Content="-"
+                                    Style="{StaticResource SecondaryButtonStyle}" />
+                                <TextBlock
+                                    Margin="0,0,8,0"
+                                    VerticalAlignment="Center"
+                                    Text="{Binding PreviewZoom, StringFormat={}{0:0.0}x}" />
+                                <Button
+                                    Width="28"
+                                    Margin="0,0,8,0"
+                                    Command="{Binding ZoomInCommand}"
+                                    Content="+"
+                                    Style="{StaticResource SecondaryButtonStyle}" />
+                                <Button
+                                    Margin="0,0,8,0"
+                                    Command="{Binding ResetZoomCommand}"
+                                    Content="重置"
+                                    Style="{StaticResource SecondaryButtonStyle}" />
+                                <Slider
+                                    Width="160"
+                                    LargeChange="0.5"
+                                    Maximum="4"
+                                    Minimum="0.5"
+                                    SmallChange="0.1"
+                                    Value="{Binding PreviewZoom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <ScrollViewer
+                                Grid.Row="1"
+                                CanContentScroll="False"
+                                HorizontalScrollBarVisibility="Auto"
+                                VerticalScrollBarVisibility="Auto">
+                                <controls:LabelCanvas
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    ElementDragStartedCommand="{Binding BeginSelectedElementMoveCommand}"
+                                    ElementMovedCommand="{Binding MoveSelectedElementCommand}"
+                                    ElementSelectedCommand="{Binding SelectElementByIdCommand}"
+                                    SelectedElementId="{Binding SelectedElementId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    SnapsToDevicePixels="True"
+                                    TableCellContextMenuCommand="{Binding TableCellContextMenuCommand}"
+                                    TableCellInnerElementMovedCommand="{Binding TableCellInnerElementMoveCommand}"
+                                    TableCellResizeCommand="{Binding TableCellResizeCommand}"
+                                    Template="{Binding PreviewTemplate}"
+                                    ZoomFactor="{Binding PreviewZoom}" />
+                            </ScrollViewer>
+                        </Grid>
                     </Border>
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Row="1" Height="12" HorizontalAlignment="Stretch" Background="#D8CBB7" />
+            <GridSplitter
+                Grid.Row="1"
+                Height="12"
+                HorizontalAlignment="Stretch"
+                Background="#D8CBB7" />
 
-            <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,0">
+            <Border
+                Grid.Row="2"
+                Margin="0,0,0,0"
+                Style="{StaticResource CardBorderStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="TSPL 预览" />
-                    <TextBox Grid.Row="1"
-                             AcceptsReturn="True"
-                             HorizontalScrollBarVisibility="Auto"
-                             VerticalScrollBarVisibility="Auto"
-                             Text="{Binding TsplPreview}"
-                             FontFamily="Cascadia Mono"
-                             FontSize="13"
-                             IsReadOnly="True" />
+                    <TextBox
+                        Grid.Row="1"
+                        AcceptsReturn="True"
+                        FontFamily="Cascadia Mono"
+                        FontSize="13"
+                        HorizontalScrollBarVisibility="Auto"
+                        IsReadOnly="True"
+                        Text="{Binding TsplPreview}"
+                        VerticalScrollBarVisibility="Auto" />
                 </Grid>
             </Border>
         </Grid>
 
-        <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,0">
+        <Border
+            Grid.Column="2"
+            Margin="0,0,0,0"
+            Style="{StaticResource CardBorderStyle}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="标签设置" />
@@ -110,7 +206,10 @@
                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="打印浓度" />
                     <TextBox Text="{Binding Density, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionTitleTextStyle}" Text="元素属性" />
+                    <TextBlock
+                        Margin="0,16,0,0"
+                        Style="{StaticResource SectionTitleTextStyle}"
+                        Text="元素属性" />
                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="位置 X" />
                     <TextBox Text="{Binding ElementX, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="位置 Y" />
@@ -118,7 +217,10 @@
                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="旋转角度" />
                     <TextBox Text="{Binding ElementRotation, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <TextBlock Margin="0,10,0,0" Style="{StaticResource CaptionTextStyle}" Text="类型专属属性" />
+                    <TextBlock
+                        Margin="0,10,0,0"
+                        Style="{StaticResource CaptionTextStyle}"
+                        Text="类型专属属性" />
                     <ContentControl Content="{Binding SelectedElement}">
                         <ContentControl.Resources>
                             <DataTemplate DataType="{x:Type models:TextElement}">
@@ -134,8 +236,7 @@
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="条码内容" />
                                     <TextBox Text="{Binding DataContext.SelectedBarcodeContent, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="条码类型" />
-                                    <ComboBox SelectedValue="{Binding DataContext.SelectedBarcodeType, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                              SelectedValuePath="Tag">
+                                    <ComboBox SelectedValue="{Binding DataContext.SelectedBarcodeType, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
                                         <ComboBoxItem Content="Code39" Tag="{x:Static models:BarcodeType.Code39}" />
                                         <ComboBoxItem Content="Code128" Tag="{x:Static models:BarcodeType.Code128}" />
                                         <ComboBoxItem Content="Ean13" Tag="{x:Static models:BarcodeType.Ean13}" />
@@ -193,8 +294,11 @@
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="列宽 B" />
                                     <TextBox Text="{Binding DataContext.SelectedTableColumnWidthB, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
 
-                                    <TextBlock Margin="0,8,0,0" Style="{StaticResource SectionTitleTextStyle}" Text="单元格内容" />
-                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                    <TextBlock
+                                        Margin="0,8,0,0"
+                                        Style="{StaticResource SectionTitleTextStyle}"
+                                        Text="单元格内容" />
+                                    <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
                                         <StackPanel Width="160">
                                             <TextBlock Style="{StaticResource CaptionTextStyle}" Text="(1,1) 类型" />
                                             <ComboBox SelectedValue="{Binding DataContext.SelectedTableCell11Type, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
@@ -216,7 +320,7 @@
                                             <TextBox Text="{Binding DataContext.SelectedTableCell12Content, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                     </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
                                         <StackPanel Width="160">
                                             <TextBlock Style="{StaticResource CaptionTextStyle}" Text="(2,1) 类型" />
                                             <ComboBox SelectedValue="{Binding DataContext.SelectedTableCell21Type, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
@@ -243,19 +347,30 @@
                         </ContentControl.Resources>
                     </ContentControl>
 
-                    <Button Style="{StaticResource ActionButtonStyle}"
-                            Command="{Binding ApplySelectedElementChangesCommand}"
-                            Content="应用属性更改" />
+                    <Button
+                        Command="{Binding ApplySelectedElementChangesCommand}"
+                        Content="应用属性更改"
+                        Style="{StaticResource ActionButtonStyle}" />
                     <WrapPanel Margin="0,10,0,0">
-                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding UndoCommand}" Content="撤销" />
-                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding RedoCommand}" Content="重做" />
-                        <Button Style="{StaticResource SecondaryButtonStyle}" Command="{Binding SaveTemplateAsCommand}" Content="另存为" />
+                        <Button
+                            Command="{Binding UndoCommand}"
+                            Content="撤销"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            Command="{Binding RedoCommand}"
+                            Content="重做"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            Command="{Binding SaveTemplateAsCommand}"
+                            Content="另存为"
+                            Style="{StaticResource SecondaryButtonStyle}" />
                     </WrapPanel>
 
-                    <TextBlock Margin="0,12,0,0"
-                               TextWrapping="Wrap"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               Text="{Binding EditorHint}" />
+                    <TextBlock
+                        Margin="0,12,0,0"
+                        Foreground="{StaticResource MutedTextBrush}"
+                        Text="{Binding EditorHint}"
+                        TextWrapping="Wrap" />
                 </StackPanel>
             </ScrollViewer>
         </Border>

@@ -30,9 +30,15 @@ public partial class EditorViewModel : ObservableObject
     private readonly Stack<string> _undoStack = new();
     private readonly Stack<string> _redoStack = new();
     private IAsyncRelayCommand<TableCellContextMenuRequest?>? _tableCellContextMenuCommand;
+    private IRelayCommand<TableCellInnerElementMoveRequest?>? _tableCellInnerElementMoveCommand;
+    private IRelayCommand<TableCellResizeRequest?>? _tableCellResizeCommand;
     private bool _isApplyingSnapshot;
 
     public IAsyncRelayCommand<TableCellContextMenuRequest?> TableCellContextMenuCommand => _tableCellContextMenuCommand ??= new AsyncRelayCommand<TableCellContextMenuRequest?>(HandleTableCellContextMenuAsync);
+
+    public IRelayCommand<TableCellInnerElementMoveRequest?> TableCellInnerElementMoveCommand => _tableCellInnerElementMoveCommand ??= new RelayCommand<TableCellInnerElementMoveRequest?>(MoveSelectedCellInnerElement);
+
+    public IRelayCommand<TableCellResizeRequest?> TableCellResizeCommand => _tableCellResizeCommand ??= new RelayCommand<TableCellResizeRequest?>(HandleTableCellResize);
 
     /// <summary>
     /// 创建标签编辑器视图模型。
@@ -71,6 +77,9 @@ public partial class EditorViewModel : ObservableObject
 
     [ObservableProperty]
     private double labelGap = 2;
+
+    [ObservableProperty]
+    private double previewZoom = 2.0;
 
     [ObservableProperty]
     private int density = 8;
@@ -269,6 +278,24 @@ public partial class EditorViewModel : ObservableObject
         ResetDocument(true);
     }
 
+    [RelayCommand]
+    private void ZoomIn()
+    {
+        PreviewZoom = Math.Min(4.0, PreviewZoom + 0.2);
+    }
+
+    [RelayCommand]
+    private void ZoomOut()
+    {
+        PreviewZoom = Math.Max(0.5, PreviewZoom - 0.2);
+    }
+
+    [RelayCommand]
+    private void ResetZoom()
+    {
+        PreviewZoom = 2.0;
+    }
+
     /// <summary>
     /// 打开已有的标签模板文件。
     /// </summary>
@@ -463,21 +490,28 @@ public partial class EditorViewModel : ObservableObject
     [RelayCommand]
     private void AddTableElement()
     {
+        var dotsPerMillimeter = 8.0;
+        var labelWidthDots = (int)Math.Round(LabelWidth * dotsPerMillimeter);
+        var labelHeightDots = (int)Math.Round(LabelHeight * dotsPerMillimeter);
+        var margin = 24;
+        var availableWidth = Math.Max(120, labelWidthDots - margin * 2);
+        var availableHeight = Math.Max(120, labelHeightDots - margin * 2);
+        var columnWidthA = Math.Max(40, availableWidth / 2);
+        var columnWidthB = Math.Max(40, availableWidth - columnWidthA);
+        var rowHeight = Math.Max(40, availableHeight / 2);
+        var tableWidth = columnWidthA + columnWidthB;
+        var tableHeight = rowHeight * 2;
+        var x = Math.Max(0, (labelWidthDots - tableWidth) / 2);
+        var y = Math.Max(0, (labelHeightDots - tableHeight) / 2);
+
         AddElement(new TableElement
         {
-            X = 40,
-            Y = 40,
+            X = x,
+            Y = y,
             Rows = 2,
             Cols = 2,
-            RowHeight = 90,
-            ColumnWidths = new List<int> { 260, 260 },
-            Cells = new List<TableCell>
-            {
-                new TableCell { ContentType = TableCellContentType.Text, Content = "标题1" },
-                new TableCell { ContentType = TableCellContentType.Text, Content = "标题2" },
-                new TableCell { ContentType = TableCellContentType.Barcode, Content = "12345678", BarcodeType = BarcodeType.Code128 },
-                new TableCell { ContentType = TableCellContentType.QrCode, Content = "https://example.com", QrCellWidth = 5, QrErrorCorrectionLevel = "M", QrMode = "A" },
-            }
+            RowHeight = rowHeight,
+            ColumnWidths = new List<int> { columnWidthA, columnWidthB },
         }, "已添加表格元素");
     }
 
@@ -520,6 +554,21 @@ public partial class EditorViewModel : ObservableObject
             case TableCellContextMenuAction.RemoveColumn:
                 tableElement.RemoveColumnAt(request.Column);
                 break;
+            case TableCellContextMenuAction.AddCellTextElement:
+                AddCellInnerElement(tableElement, request.Row, request.Column, new TableCellTextElement { Content = "文本", Width = 120, Height = 40 });
+                break;
+            case TableCellContextMenuAction.AddCellBarcodeElement:
+                AddCellInnerElement(tableElement, request.Row, request.Column, new TableCellBarcodeElement { Content = "12345678", Width = 140, Height = 40 });
+                break;
+            case TableCellContextMenuAction.AddCellQrCodeElement:
+                AddCellInnerElement(tableElement, request.Row, request.Column, new TableCellQrCodeElement { Content = "https://example.com", Width = 80, Height = 80 });
+                break;
+            case TableCellContextMenuAction.EditCellInnerElement:
+                await EditTableCellInnerElementAsync(tableElement, request.Row, request.Column);
+                return;
+            case TableCellContextMenuAction.RemoveCellInnerElement:
+                RemoveCellInnerElement(tableElement, request.Row, request.Column);
+                break;
             case TableCellContextMenuAction.EditCell:
                 await EditTableCellAsync(tableElement, request.Row, request.Column);
                 return;
@@ -557,6 +606,159 @@ public partial class EditorViewModel : ObservableObject
             RefreshPreview();
             _statusCenter.SetActivityMessage($"单元格 ({row + 1},{column + 1}) 已更新");
         }
+    }
+
+    private void AddCellInnerElement(TableElement tableElement, int row, int column, TableCellInnerElement innerElement)
+    {
+        if (row < 0 || row >= tableElement.Rows || column < 0 || column >= tableElement.Cols)
+        {
+            return;
+        }
+
+        CaptureUndoSnapshot();
+        tableElement.EnsureCellCount();
+        var cellIndex = row * tableElement.Cols + column;
+        var cell = tableElement.Cells[cellIndex];
+        cell.MigrateLegacyContentToInnerElements();
+        cell.InnerElements.Add(innerElement);
+        RefreshPreview();
+        _statusCenter.SetActivityMessage("已向单元格添加内部元素");
+    }
+
+    private async Task EditTableCellInnerElementAsync(TableElement tableElement, int row, int column)
+    {
+        if (row < 0 || row >= tableElement.Rows || column < 0 || column >= tableElement.Cols)
+        {
+            return;
+        }
+
+        tableElement.EnsureCellCount();
+        var cellIndex = row * tableElement.Cols + column;
+        var cell = tableElement.Cells[cellIndex];
+        if (cell.InnerElements.Count == 0)
+        {
+            await EditTableCellAsync(tableElement, row, column);
+            return;
+        }
+
+        var editor = new TableCellInnerElementEditorViewModel(cell);
+        var dialog = new TableCellInnerElementEditorWindow
+        {
+            DataContext = editor,
+            Owner = Application.Current?.MainWindow,
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            CaptureUndoSnapshot();
+            tableElement.Cells[cellIndex] = editor.BuildTableCell();
+            RefreshPreview();
+            _statusCenter.SetActivityMessage($"单元格 ({row + 1},{column + 1}) 内部元素已更新");
+        }
+    }
+
+    private void RemoveCellInnerElement(TableElement tableElement, int row, int column)
+    {
+        if (row < 0 || row >= tableElement.Rows || column < 0 || column >= tableElement.Cols)
+        {
+            return;
+        }
+
+        tableElement.EnsureCellCount();
+        var cellIndex = row * tableElement.Cols + column;
+        var cell = tableElement.Cells[cellIndex];
+        if (cell.InnerElements.Count == 0)
+        {
+            return;
+        }
+
+        CaptureUndoSnapshot();
+        cell.InnerElements.RemoveAt(cell.InnerElements.Count - 1);
+        RefreshPreview();
+        _statusCenter.SetActivityMessage("已删除单元格内的最后一个内部元素");
+    }
+
+    [RelayCommand(CanExecute = nameof(CanEditSelectedElement))]
+    private void MoveSelectedCellInnerElement(TableCellInnerElementMoveRequest? request)
+    {
+        if (request is null)
+        {
+            return;
+        }
+
+        var tableElement = Elements.OfType<TableElement>().FirstOrDefault(e => e.Id == request.TableElementId);
+        if (tableElement is null)
+        {
+            return;
+        }
+
+        var cellIndex = request.Row * tableElement.Cols + request.Column;
+        if (cellIndex < 0 || cellIndex >= tableElement.Cells.Count)
+        {
+            return;
+        }
+
+        var cell = tableElement.Cells[cellIndex];
+        var innerElement = cell.InnerElements.FirstOrDefault(e => e.Id == request.InnerElementId);
+        if (innerElement is null)
+        {
+            return;
+        }
+
+        innerElement.X = request.X;
+        innerElement.Y = request.Y;
+        innerElement.Width = request.Width;
+        innerElement.Height = request.Height;
+
+        RefreshPreview();
+    }
+
+    private void HandleTableCellResize(TableCellResizeRequest? request)
+    {
+        if (request is null)
+        {
+            return;
+        }
+
+        var tableElement = Elements.OfType<TableElement>().FirstOrDefault(e => e.Id == request.TableElementId);
+        if (tableElement is null)
+        {
+            return;
+        }
+
+        switch (request.Mode)
+        {
+            case TableCellResizeMode.Column:
+                if (request.Index >= 0 && request.Index < tableElement.ColumnWidths.Count)
+                {
+                    tableElement.ColumnWidths[request.Index] = request.NewSize;
+                }
+                break;
+            case TableCellResizeMode.Row:
+                if (request.RowHeights is not null && request.RowHeights.Count == tableElement.Rows)
+                {
+                    tableElement.RowHeights.Clear();
+                    tableElement.RowHeights.AddRange(request.RowHeights);
+                }
+                else if (request.Index >= 0 && request.Index < tableElement.RowHeights.Count)
+                {
+                    tableElement.RowHeights[request.Index] = request.NewSize;
+                }
+                else
+                {
+                    tableElement.RowHeight = request.NewSize;
+                }
+                break;
+        }
+
+        if (SelectedElement is TableElement selectedTable && selectedTable.Id == tableElement.Id)
+        {
+            SelectedTableRowHeight = tableElement.RowHeight;
+            SelectedTableColumnWidthA = tableElement.ColumnWidths.ElementAtOrDefault(0);
+            SelectedTableColumnWidthB = tableElement.ColumnWidths.ElementAtOrDefault(1);
+        }
+
+        RefreshPreview();
     }
 
     /// <summary>
@@ -793,6 +995,7 @@ public partial class EditorViewModel : ObservableObject
         LabelHeight = 40;
         LabelGap = 2;
         Density = 8;
+        PreviewZoom = 2.0;
         Elements.Clear();
         SelectedElement = null;
         CurrentFilePath = null;

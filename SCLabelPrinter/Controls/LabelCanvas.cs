@@ -28,6 +28,10 @@ public sealed class LabelCanvas : FrameworkElement
     private readonly Brush _eraseBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFC));
     private readonly Pen _borderPen = new(new SolidColorBrush(Color.FromRgb(0xD9, 0xD2, 0xC3)), 1);
     private readonly Pen _workspaceBorderPen = new(new SolidColorBrush(Color.FromRgb(0xD0, 0xBF, 0xA5)), 1);
+    private readonly Pen _workspaceGridPen = new(new SolidColorBrush(Color.FromArgb(0x40, 0xB0, 0xA8, 0x88)), 0.6)
+    {
+        DashStyle = new DashStyle(new double[] { 2, 4 }, 0),
+    };
     private readonly Pen _paperBorderPen = new(new SolidColorBrush(Color.FromRgb(0xB7, 0xA7, 0x92)), 1.4);
     private readonly Pen _paperGuidePen = new(new SolidColorBrush(Color.FromArgb(0x82, 0xC7, 0xB8, 0xA2)), 0.9)
     {
@@ -41,13 +45,53 @@ public sealed class LabelCanvas : FrameworkElement
     };
     private readonly Brush _tableBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xFC, 0xFC, 0xFF));
     private readonly Brush _tableAlternateRowBrush = new SolidColorBrush(Color.FromArgb(24, 0xEA, 0xEA, 0xF0));
-    private readonly Pen _tableBorderPen = new(new SolidColorBrush(Color.FromRgb(0x25, 0x27, 0x2E)), 1.6);
+    private readonly Pen _tableBorderPen = new(new SolidColorBrush(Color.FromRgb(0x25, 0x27, 0x2E)), 1.6)
+    {
+        DashStyle = new DashStyle(new double[] { 2, 2 }, 0),
+    };
     private readonly Pen _tableGridPen = new(new SolidColorBrush(Color.FromRgb(0x9A, 0x9E, 0xAC)), 0.7)
     {
         DashStyle = new DashStyle(new double[] { 2, 2 }, 0),
     };
     private string? _draggingElementId;
     private Point _dragOffset;
+    private TableCellInnerElementHit? _draggingCellInnerElement;
+    private Point _dragOffsetInner;
+    private string? _selectedTableCellInnerElementId;
+    private const double TableResizeHandleThreshold = 6.0;
+    private const double TableInnerElementHandleSize = 8.0;
+    private const double TableElementCornerHandleSize = 12.0;
+    private TableResizeMode _tableResizeMode = TableResizeMode.None;
+    private TableElement? _resizingTableElement;
+    private int _resizingTableIndex;
+    private int _resizingRowIndex;
+    private bool _resizingOuterHandle;
+    private Point _resizeStartPoint;
+    private int _resizeOriginalSize;
+    private int _resizeOriginalRowHeight;
+    private int _resizeOriginalNextRowHeight;
+    private InnerElementResizeMode _innerElementResizeMode = InnerElementResizeMode.None;
+    private TableCellInnerElementResizeHit? _resizingCellInnerElement;
+    private Point _resizeStartPointInner;
+    private int _resizeOriginalInnerWidth;
+    private int _resizeOriginalInnerHeight;
+
+    private sealed record TableCellInnerElementHit(TableElement Table, TableCell Cell, int Row, int Column, TableCellInnerElement InnerElement);
+    private sealed record TableCellInnerElementResizeHit(TableElement Table, TableCell Cell, int Row, int Column, TableCellInnerElement InnerElement);
+    private sealed record TableResizeHandleHit(TableElement Table, TableResizeMode Mode, int Index, int OriginalSize, bool IsOuterHandle = false);
+    private enum InnerElementResizeMode
+    {
+        None,
+        Resize,
+    }
+
+    private enum TableResizeMode
+    {
+        None,
+        Column,
+        Row,
+        Overall,
+    }
 
     public LabelCanvas()
     {
@@ -58,7 +102,7 @@ public sealed class LabelCanvas : FrameworkElement
         nameof(Template),
         typeof(LabelTemplateDocument),
         typeof(LabelCanvas),
-        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender | FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public static readonly DependencyProperty SelectedElementIdProperty = DependencyProperty.Register(
         nameof(SelectedElementId),
@@ -89,6 +133,24 @@ public sealed class LabelCanvas : FrameworkElement
         typeof(ICommand),
         typeof(LabelCanvas),
         new FrameworkPropertyMetadata(null));
+
+    public static readonly DependencyProperty TableCellInnerElementMovedCommandProperty = DependencyProperty.Register(
+        nameof(TableCellInnerElementMovedCommand),
+        typeof(ICommand),
+        typeof(LabelCanvas),
+        new FrameworkPropertyMetadata(null));
+
+    public static readonly DependencyProperty TableCellResizeCommandProperty = DependencyProperty.Register(
+        nameof(TableCellResizeCommand),
+        typeof(ICommand),
+        typeof(LabelCanvas),
+        new FrameworkPropertyMetadata(null));
+
+    public static readonly DependencyProperty ZoomFactorProperty = DependencyProperty.Register(
+        nameof(ZoomFactor),
+        typeof(double),
+        typeof(LabelCanvas),
+        new FrameworkPropertyMetadata(1.0, FrameworkPropertyMetadataOptions.AffectsRender | FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public LabelTemplateDocument? Template
     {
@@ -126,6 +188,24 @@ public sealed class LabelCanvas : FrameworkElement
         set => SetValue(TableCellContextMenuCommandProperty, value);
     }
 
+    public ICommand? TableCellInnerElementMovedCommand
+    {
+        get => (ICommand?)GetValue(TableCellInnerElementMovedCommandProperty);
+        set => SetValue(TableCellInnerElementMovedCommandProperty, value);
+    }
+
+    public ICommand? TableCellResizeCommand
+    {
+        get => (ICommand?)GetValue(TableCellResizeCommandProperty);
+        set => SetValue(TableCellResizeCommandProperty, value);
+    }
+
+    public double ZoomFactor
+    {
+        get => (double)GetValue(ZoomFactorProperty);
+        set => SetValue(ZoomFactorProperty, value);
+    }
+
     /// <summary>
     /// 在控件表面绘制标签边界和全部元素预览。
     /// </summary>
@@ -144,7 +224,7 @@ public sealed class LabelCanvas : FrameworkElement
         var surface = CreateSurfaceRect();
         DrawWorkspaceSurface(drawingContext, surface);
 
-        var (scale, origin) = CalculateScale(surface, Template.Label);
+        var (scale, origin) = CalculateScale(surface, Template.Label, ZoomFactor);
         var labelRect = CreateLabelRect(Template.Label, scale, origin);
         DrawLabelSurface(drawingContext, labelRect);
 
@@ -171,7 +251,56 @@ public sealed class LabelCanvas : FrameworkElement
 
         var mousePoint = e.GetPosition(this);
         var surface = CreateSurfaceRect();
-        var (scale, origin) = CalculateScale(surface, Template.Label);
+        var (scale, origin) = CalculateScale(surface, Template.Label, ZoomFactor);
+        var resizeHandle = GetHitTableResizeHandle(mousePoint, scale, origin);
+        if (resizeHandle is not null)
+        {
+            _tableResizeMode = resizeHandle.Mode;
+            _resizingTableElement = resizeHandle.Table;
+            _resizingTableIndex = resizeHandle.Index;
+            _resizingOuterHandle = resizeHandle.IsOuterHandle;
+            _resizeOriginalSize = resizeHandle.OriginalSize;
+            _resizeStartPoint = mousePoint;
+            if (_tableResizeMode == TableResizeMode.Row || _tableResizeMode == TableResizeMode.Overall)
+            {
+                _resizingRowIndex = _tableResizeMode == TableResizeMode.Overall
+                    ? resizeHandle.Table.Rows - 1
+                    : resizeHandle.Index;
+                _resizeOriginalRowHeight = resizeHandle.Table.GetRowHeight(_resizingRowIndex);
+                _resizeOriginalNextRowHeight = _resizingRowIndex + 1 < resizeHandle.Table.Rows
+                    ? resizeHandle.Table.GetRowHeight(_resizingRowIndex + 1)
+                    : 0;
+            }
+            CaptureMouse();
+            SelectedElementId = resizeHandle.Table.Id;
+            e.Handled = true;
+            return;
+        }
+
+        var innerResizeHit = GetHitTableCellInnerElementResizeHandle(mousePoint, scale, origin);
+        if (innerResizeHit is not null)
+        {
+            _innerElementResizeMode = InnerElementResizeMode.Resize;
+            _resizingCellInnerElement = innerResizeHit;
+            _resizeStartPointInner = mousePoint;
+            _resizeOriginalInnerWidth = innerResizeHit.InnerElement.Width;
+            _resizeOriginalInnerHeight = innerResizeHit.InnerElement.Height;
+            _selectedTableCellInnerElementId = innerResizeHit.InnerElement.Id;
+            CaptureMouse();
+            SelectedElementId = innerResizeHit.Table.Id;
+            e.Handled = true;
+            return;
+        }
+
+        var hitInner = GetHitTableCellInnerElement(mousePoint, scale, origin);
+        if (hitInner is not null)
+        {
+            _draggingCellInnerElement = hitInner;
+            var innerLeft = origin.X + hitInner.Table.X * scale + hitInner.Table.ColumnWidths.Take(hitInner.Column).Sum() * scale + hitInner.InnerElement.X * scale;
+                var innerTop = origin.Y + hitInner.Table.Y * scale + hitInner.Table.GetRowHeight(hitInner.Row) * scale + hitInner.InnerElement.Y * scale;
+            return;
+        }
+
         var hitElement = GetHitElement(mousePoint, scale, origin);
         if (hitElement is null)
         {
@@ -214,7 +343,24 @@ public sealed class LabelCanvas : FrameworkElement
 
         var mousePoint = e.GetPosition(this);
         var surface = CreateSurfaceRect();
-        var (scale, origin) = CalculateScale(surface, Template.Label);
+        var (scale, origin) = CalculateScale(surface, Template.Label, ZoomFactor);
+        var hitInner = GetHitTableCellInnerElement(mousePoint, scale, origin);
+        if (hitInner is not null)
+        {
+            SelectedElementId = hitInner.Table.Id;
+            var innerContextMenu = new ContextMenu
+            {
+                PlacementTarget = this,
+                Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint,
+            };
+
+            innerContextMenu.Items.Add(CreateMenuItem("编辑单元格内部元素", TableCellContextMenuAction.EditCellInnerElement, hitInner.Table, hitInner.Row, hitInner.Column));
+            innerContextMenu.Items.Add(CreateMenuItem("删除单元格内部元素", TableCellContextMenuAction.RemoveCellInnerElement, hitInner.Table, hitInner.Row, hitInner.Column));
+            innerContextMenu.IsOpen = true;
+            e.Handled = true;
+            return;
+        }
+
         var hitElement = GetHitElement(mousePoint, scale, origin);
         if (hitElement is not TableElement tableElement)
         {
@@ -228,9 +374,11 @@ public sealed class LabelCanvas : FrameworkElement
         }
 
         SelectedElementId = tableElement.Id;
-        var contextMenu = new ContextMenu();
-        contextMenu.PlacementTarget = this;
-        contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        var contextMenu = new ContextMenu
+        {
+            PlacementTarget = this,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint,
+        };
 
         contextMenu.Items.Add(CreateMenuItem("添加当前行上方", TableCellContextMenuAction.AddRowAbove, tableElement, cell.Value.Row, cell.Value.Column));
         contextMenu.Items.Add(CreateMenuItem("添加当前行下方", TableCellContextMenuAction.AddRowBelow, tableElement, cell.Value.Row, cell.Value.Column));
@@ -243,6 +391,10 @@ public sealed class LabelCanvas : FrameworkElement
         var removeColumnItem = CreateMenuItem("删除当前列", TableCellContextMenuAction.RemoveColumn, tableElement, cell.Value.Row, cell.Value.Column);
         removeColumnItem.IsEnabled = tableElement.Cols > 1;
         contextMenu.Items.Add(removeColumnItem);
+        contextMenu.Items.Add(new Separator());
+        contextMenu.Items.Add(CreateMenuItem("添加单元格文本元素", TableCellContextMenuAction.AddCellTextElement, tableElement, cell.Value.Row, cell.Value.Column));
+        contextMenu.Items.Add(CreateMenuItem("添加单元格条码元素", TableCellContextMenuAction.AddCellBarcodeElement, tableElement, cell.Value.Row, cell.Value.Column));
+        contextMenu.Items.Add(CreateMenuItem("添加单元格二维码元素", TableCellContextMenuAction.AddCellQrCodeElement, tableElement, cell.Value.Row, cell.Value.Column));
         contextMenu.Items.Add(new Separator());
         contextMenu.Items.Add(CreateMenuItem("编辑当前单元格", TableCellContextMenuAction.EditCell, tableElement, cell.Value.Row, cell.Value.Column));
 
@@ -281,7 +433,7 @@ public sealed class LabelCanvas : FrameworkElement
         var left = origin.X + table.X * scale;
         var top = origin.Y + table.Y * scale;
         var totalWidth = table.ColumnWidths.Sum() * scale;
-        var totalHeight = table.Rows * table.RowHeight * scale;
+        var totalHeight = table.TotalHeight * scale;
         var localX = point.X - left;
         var localY = point.Y - top;
 
@@ -290,13 +442,23 @@ public sealed class LabelCanvas : FrameworkElement
             return null;
         }
 
-        var row = Math.Min(table.Rows - 1, (int)(localY / (table.RowHeight * scale)));
+        var row = 0;
+        var rowAccumulated = 0.0;
+        for (var rowIndex = 0; rowIndex < table.Rows; rowIndex++)
+        {
+            rowAccumulated += table.GetRowHeight(rowIndex) * scale;
+            if (localY <= rowAccumulated)
+            {
+                row = rowIndex;
+                break;
+            }
+        }
         var column = 0;
-        var accumulated = 0.0;
+        var columnAccumulated = 0.0;
         foreach (var width in table.ColumnWidths)
         {
-            accumulated += width * scale;
-            if (localX <= accumulated)
+            columnAccumulated += width * scale;
+            if (localX <= columnAccumulated)
             {
                 break;
             }
@@ -311,6 +473,72 @@ public sealed class LabelCanvas : FrameworkElement
         return (row, column);
     }
 
+    private TableResizeHandleHit? GetHitTableResizeHandle(Point point, double scale, Point origin)
+    {
+        foreach (var table in Template?.Elements.OfType<TableElement>() ?? Enumerable.Empty<TableElement>())
+        {
+            var left = origin.X + table.X * scale;
+            var top = origin.Y + table.Y * scale;
+            var totalWidth = table.ColumnWidths.Sum() * scale;
+            var totalHeight = table.TotalHeight * scale;
+            var right = left + totalWidth;
+            var bottom = top + totalHeight;
+
+            if (point.X < left - TableResizeHandleThreshold || point.X > right + TableResizeHandleThreshold || point.Y < top - TableResizeHandleThreshold || point.Y > bottom + TableResizeHandleThreshold)
+            {
+                continue;
+            }
+
+            var columnLeft = left;
+            for (var columnIndex = 0; columnIndex < table.Cols - 1; columnIndex++)
+            {
+                columnLeft += table.GetColumnWidth(columnIndex) * scale;
+                if (Math.Abs(point.X - columnLeft) <= TableResizeHandleThreshold && point.Y >= top && point.Y <= bottom)
+                {
+                    return new TableResizeHandleHit(table, TableResizeMode.Column, columnIndex, table.GetColumnWidth(columnIndex));
+                }
+            }
+
+            if (Math.Abs(point.X - left) <= TableResizeHandleThreshold && point.Y >= top && point.Y <= bottom)
+            {
+                return new TableResizeHandleHit(table, TableResizeMode.Column, 0, table.GetColumnWidth(0), true);
+            }
+
+            if (Math.Abs(point.X - right) <= TableResizeHandleThreshold && point.Y >= top && point.Y <= bottom)
+            {
+                return new TableResizeHandleHit(table, TableResizeMode.Column, table.Cols - 1, table.GetColumnWidth(table.Cols - 1), true);
+            }
+
+            var rowTop = top;
+            for (var rowIndex = 1; rowIndex < table.Rows; rowIndex++)
+            {
+                rowTop += table.GetRowHeight(rowIndex - 1) * scale;
+                if (Math.Abs(point.Y - rowTop) <= TableResizeHandleThreshold && point.X >= left && point.X <= right)
+                {
+                    return new TableResizeHandleHit(table, TableResizeMode.Row, rowIndex - 1, table.GetRowHeight(rowIndex - 1));
+                }
+            }
+
+            if (Math.Abs(point.Y - top) <= TableResizeHandleThreshold && point.X >= left && point.X <= right)
+            {
+                return new TableResizeHandleHit(table, TableResizeMode.Row, 0, table.GetRowHeight(0), true);
+            }
+
+            if (Math.Abs(point.Y - bottom) <= TableResizeHandleThreshold && point.X >= left && point.X <= right)
+            {
+                return new TableResizeHandleHit(table, TableResizeMode.Row, table.Rows - 1, table.GetRowHeight(table.Rows - 1), true);
+            }
+
+            var cornerHandleRect = new Rect(right - TableElementCornerHandleSize, bottom - TableElementCornerHandleSize, TableElementCornerHandleSize, TableElementCornerHandleSize);
+            if (cornerHandleRect.Contains(point))
+            {
+                return new TableResizeHandleHit(table, TableResizeMode.Overall, table.Cols - 1, table.GetColumnWidth(table.Cols - 1));
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// 鼠标移动时更新拖动元素位置。
     /// </summary>
@@ -318,14 +546,195 @@ public sealed class LabelCanvas : FrameworkElement
     {
         base.OnMouseMove(e);
 
-        if (_draggingElementId is null || !IsMouseCaptured || Template is null)
+        if (!IsMouseCaptured || Template is null)
         {
             return;
         }
 
         var mousePoint = e.GetPosition(this);
         var surface = CreateSurfaceRect();
-        var (scale, origin) = CalculateScale(surface, Template.Label);
+        var (scale, origin) = CalculateScale(surface, Template.Label, ZoomFactor);
+
+        if (_innerElementResizeMode != InnerElementResizeMode.None && _resizingCellInnerElement is not null)
+        {
+            var deltaX = mousePoint.X - _resizeStartPointInner.X;
+            var deltaY = mousePoint.Y - _resizeStartPointInner.Y;
+            var newWidth = _resizeOriginalInnerWidth + (int)Math.Round(deltaX / scale);
+            var newHeight = _resizeOriginalInnerHeight + (int)Math.Round(deltaY / scale);
+            newWidth = Math.Max(20, newWidth);
+            newHeight = Math.Max(20, newHeight);
+
+            var cellWidth = _resizingCellInnerElement.Table.GetColumnWidth(_resizingCellInnerElement.Column) * scale;
+            var cellHeight = _resizingCellInnerElement.Table.GetRowHeight(_resizingCellInnerElement.Row) * scale;
+            var maxInnerWidth = (int)Math.Max(20, Math.Floor((cellWidth - _resizingCellInnerElement.InnerElement.X * scale) / scale));
+            var maxInnerHeight = (int)Math.Max(20, Math.Floor((cellHeight - _resizingCellInnerElement.InnerElement.Y * scale) / scale));
+            newWidth = Math.Min(newWidth, maxInnerWidth);
+            newHeight = Math.Min(newHeight, maxInnerHeight);
+
+            _resizingCellInnerElement.InnerElement.Width = newWidth;
+            _resizingCellInnerElement.InnerElement.Height = newHeight;
+            _selectedTableCellInnerElementId = _resizingCellInnerElement.InnerElement.Id;
+
+            var innerMoveRequest = new TableCellInnerElementMoveRequest(
+                _resizingCellInnerElement.Table.Id,
+                _resizingCellInnerElement.Row,
+                _resizingCellInnerElement.Column,
+                _resizingCellInnerElement.InnerElement.Id,
+                _resizingCellInnerElement.InnerElement.X,
+                _resizingCellInnerElement.InnerElement.Y,
+                _resizingCellInnerElement.InnerElement.Width,
+                _resizingCellInnerElement.InnerElement.Height);
+            var innerMovedCommand = TableCellInnerElementMovedCommand;
+            if (innerMovedCommand is not null && innerMovedCommand.CanExecute(innerMoveRequest))
+            {
+                innerMovedCommand.Execute(innerMoveRequest);
+            }
+
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        if (_tableResizeMode != TableResizeMode.None && _resizingTableElement is not null)
+        {
+            var labelWidthDots = Template.Label.Unit == LabelUnit.Millimeter ? Template.Label.Width * DotsPerMillimeter : Template.Label.Width;
+            var labelHeightDots = Template.Label.Unit == LabelUnit.Millimeter ? Template.Label.Height * DotsPerMillimeter : Template.Label.Height;
+            var availableWidth = Math.Max(20, (int)Math.Floor(labelWidthDots - _resizingTableElement.X));
+            var availableHeight = Math.Max(20, (int)Math.Floor(labelHeightDots - _resizingTableElement.Y));
+            var resizeColumnIndex = _resizingTableIndex >= 0 ? _resizingTableIndex : 0;
+            var otherColumnsWidth = _resizingTableElement.ColumnWidths.Sum() - _resizingTableElement.GetColumnWidth(resizeColumnIndex);
+
+            if (_tableResizeMode == TableResizeMode.Overall)
+            {
+                var deltaX = mousePoint.X - _resizeStartPoint.X;
+                var deltaY = mousePoint.Y - _resizeStartPoint.Y;
+
+                var targetColumnIndex = _resizingTableIndex >= 0 ? _resizingTableIndex : _resizingTableElement.Cols - 1;
+                var targetRowIndex = _resizingRowIndex >= 0 ? _resizingRowIndex : _resizingTableElement.Rows - 1;
+
+                var maxColumnWidth = Math.Max(20, availableWidth - otherColumnsWidth);
+                var newColumnWidth = _resizeOriginalSize + (int)Math.Round(deltaX / scale);
+                newColumnWidth = Math.Max(20, Math.Min(newColumnWidth, maxColumnWidth));
+                if (targetColumnIndex >= 0 && targetColumnIndex < _resizingTableElement.ColumnWidths.Count)
+                {
+                    _resizingTableElement.ColumnWidths[targetColumnIndex] = newColumnWidth;
+                }
+
+                var otherRowsHeight = _resizingTableElement.TotalHeight - _resizeOriginalRowHeight;
+                var maxRowHeight = Math.Max(20, availableHeight - otherRowsHeight);
+                var newRowHeight = _resizeOriginalRowHeight + (int)Math.Round(deltaY / scale);
+                newRowHeight = Math.Max(20, Math.Min(newRowHeight, maxRowHeight));
+                if (targetRowIndex >= 0 && targetRowIndex < _resizingTableElement.Rows)
+                {
+                    _resizingTableElement.RowHeights[targetRowIndex] = newRowHeight;
+                }
+            }
+            else
+            {
+                if (_tableResizeMode == TableResizeMode.Column)
+                {
+                    var delta = mousePoint.X - _resizeStartPoint.X;
+                    var newSize = _resizeOriginalSize + (int)Math.Round(delta / scale);
+                    newSize = Math.Max(20, newSize);
+
+                    var columnIndexToResize = _resizingTableIndex >= 0 ? _resizingTableIndex : 0;
+                    if (columnIndexToResize >= 0 && columnIndexToResize < _resizingTableElement.ColumnWidths.Count)
+                    {
+                        var maxColumnWidth = Math.Max(20, availableWidth - otherColumnsWidth);
+                        _resizingTableElement.ColumnWidths[columnIndexToResize] = Math.Min(newSize, maxColumnWidth);
+                    }
+                }
+                else
+                {
+                    if (_resizingOuterHandle && _resizingRowIndex == 0)
+                    {
+                        var delta = mousePoint.Y - _resizeStartPoint.Y;
+                        var deltaHeight = (int)Math.Round(delta / scale);
+                        var otherRowsHeight = _resizingTableElement.TotalHeight - _resizeOriginalRowHeight;
+                        var maxHeight = Math.Max(20, Math.Min(_resizeOriginalRowHeight + deltaHeight, Math.Max(20, availableHeight - otherRowsHeight)));
+                        _resizingTableElement.RowHeights[0] = Math.Max(20, maxHeight);
+                    }
+                    else if (_resizingOuterHandle && _resizingRowIndex == _resizingTableElement.Rows - 1)
+                    {
+                        var delta = mousePoint.Y - _resizeStartPoint.Y;
+                        var deltaHeight = (int)Math.Round(delta / scale);
+                        var otherRowsHeight = _resizingTableElement.TotalHeight - _resizeOriginalRowHeight;
+                        var maxHeight = Math.Max(20, Math.Min(_resizeOriginalRowHeight + deltaHeight, Math.Max(20, availableHeight - otherRowsHeight)));
+                        _resizingTableElement.RowHeights[_resizingRowIndex] = Math.Max(20, maxHeight);
+                    }
+                    else if (_resizingRowIndex >= 0 && _resizingRowIndex + 1 < _resizingTableElement.Rows)
+                    {
+                        var delta = mousePoint.Y - _resizeStartPoint.Y;
+                        var deltaHeight = (int)Math.Round(delta / scale);
+                        var topHeight = Math.Max(20, _resizeOriginalRowHeight + deltaHeight);
+                        var bottomHeight = Math.Max(20, _resizeOriginalNextRowHeight - deltaHeight);
+                        var totalHeight = _resizeOriginalRowHeight + _resizeOriginalNextRowHeight;
+
+                        if (topHeight + bottomHeight > totalHeight)
+                        {
+                            if (topHeight > bottomHeight)
+                            {
+                                topHeight = totalHeight - bottomHeight;
+                            }
+                            else
+                            {
+                                bottomHeight = totalHeight - topHeight;
+                            }
+                        }
+
+                        topHeight = Math.Max(20, Math.Min(topHeight, totalHeight - 20));
+                        bottomHeight = Math.Max(20, Math.Min(bottomHeight, totalHeight - 20));
+
+                        _resizingTableElement.RowHeights[_resizingRowIndex] = topHeight;
+                        _resizingTableElement.RowHeights[_resizingRowIndex + 1] = bottomHeight;
+                    }
+                    else if (_resizingRowIndex == _resizingTableElement.Rows - 1)
+                    {
+                        var delta = mousePoint.Y - _resizeStartPoint.Y;
+                        var deltaHeight = (int)Math.Round(delta / scale);
+                        var otherRowsHeight = _resizingTableElement.TotalHeight - _resizeOriginalRowHeight;
+                        var newHeight = Math.Max(20, _resizeOriginalRowHeight + deltaHeight);
+                        var maxHeight = Math.Max(20, availableHeight - otherRowsHeight);
+                        _resizingTableElement.RowHeights[_resizingRowIndex] = Math.Min(newHeight, maxHeight);
+                    }
+                }
+            }
+
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        if (_draggingCellInnerElement is not null)
+        {
+            var targetLeft = mousePoint.X - _dragOffsetInner.X;
+            var targetTop = mousePoint.Y - _dragOffsetInner.Y;
+            var targetXInner = (int)Math.Round((targetLeft - origin.X - _draggingCellInnerElement.Table.X * scale - _draggingCellInnerElement.Table.ColumnWidths.Take(_draggingCellInnerElement.Column).Sum() * scale) / scale);
+            var targetYInner = (int)Math.Round((targetTop - origin.Y - _draggingCellInnerElement.Table.Y * scale - _draggingCellInnerElement.Table.GetRowHeight(_draggingCellInnerElement.Row) * scale) / scale);
+            targetXInner = Math.Max(0, targetXInner);
+            targetYInner = Math.Max(0, targetYInner);
+
+            _draggingCellInnerElement.InnerElement.X = targetXInner;
+            _draggingCellInnerElement.InnerElement.Y = targetYInner;
+            _selectedTableCellInnerElementId = _draggingCellInnerElement.InnerElement.Id;
+
+            var innerMoveRequest = new TableCellInnerElementMoveRequest(_draggingCellInnerElement.Table.Id, _draggingCellInnerElement.Row, _draggingCellInnerElement.Column, _draggingCellInnerElement.InnerElement.Id, targetXInner, targetYInner, _draggingCellInnerElement.InnerElement.Width, _draggingCellInnerElement.InnerElement.Height);
+            var innerMovedCommand = TableCellInnerElementMovedCommand;
+            if (innerMovedCommand is not null && innerMovedCommand.CanExecute(innerMoveRequest))
+            {
+                innerMovedCommand.Execute(innerMoveRequest);
+            }
+
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        if (_draggingElementId is null)
+        {
+            return;
+        }
+
         var targetPoint = new Point(mousePoint.X - _dragOffset.X, mousePoint.Y - _dragOffset.Y);
         var targetX = (int)Math.Round((targetPoint.X - origin.X) / scale);
         var targetY = (int)Math.Round((targetPoint.Y - origin.Y) / scale);
@@ -358,10 +767,48 @@ public sealed class LabelCanvas : FrameworkElement
     {
         base.OnMouseLeftButtonUp(e);
 
-        if (_draggingElementId is not null && IsMouseCaptured)
+        if (IsMouseCaptured)
         {
+            if (_tableResizeMode != TableResizeMode.None && _resizingTableElement is not null)
+            {
+                var resizeCommand = TableCellResizeCommand;
+                if (resizeCommand is not null)
+                {
+                    if (_tableResizeMode == TableResizeMode.Overall)
+                    {
+                        var targetColumnIndex = _resizingTableIndex >= 0 ? _resizingTableIndex : _resizingTableElement.Cols - 1;
+                        var targetRowIndex = _resizingRowIndex >= 0 ? _resizingRowIndex : _resizingTableElement.Rows - 1;
+                        var overallRequests = TableCellResizeRequestFactory.CreateOverallRequests(_resizingTableElement, targetColumnIndex, targetRowIndex);
+
+                        foreach (var request in overallRequests)
+                        {
+                            if (resizeCommand.CanExecute(request))
+                            {
+                                resizeCommand.Execute(request);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var request = _tableResizeMode == TableResizeMode.Column
+                            ? TableCellResizeRequestFactory.CreateColumnRequest(_resizingTableElement, _resizingTableIndex)
+                            : TableCellResizeRequestFactory.CreateRowRequest(_resizingTableElement, _resizingRowIndex);
+
+                        if (resizeCommand.CanExecute(request))
+                        {
+                            resizeCommand.Execute(request);
+                        }
+                    }
+                }
+            }
+
             ReleaseMouseCapture();
             _draggingElementId = null;
+            _draggingCellInnerElement = null;
+            _tableResizeMode = TableResizeMode.None;
+            _resizingTableElement = null;
+            _innerElementResizeMode = InnerElementResizeMode.None;
+            _resizingCellInnerElement = null;
             e.Handled = true;
         }
     }
@@ -373,6 +820,11 @@ public sealed class LabelCanvas : FrameworkElement
     {
         base.OnLostMouseCapture(e);
         _draggingElementId = null;
+        _draggingCellInnerElement = null;
+        _tableResizeMode = TableResizeMode.None;
+        _resizingTableElement = null;
+        _innerElementResizeMode = InnerElementResizeMode.None;
+        _resizingCellInnerElement = null;
     }
 
     /// <summary>
@@ -380,9 +832,24 @@ public sealed class LabelCanvas : FrameworkElement
     /// </summary>
     protected override Size MeasureOverride(Size availableSize)
     {
-        return new Size(
-            double.IsInfinity(availableSize.Width) ? 560 : availableSize.Width,
-            double.IsInfinity(availableSize.Height) ? 420 : availableSize.Height);
+        if (Template is null)
+        {
+            return new Size(
+                double.IsInfinity(availableSize.Width) ? 560 : availableSize.Width,
+                double.IsInfinity(availableSize.Height) ? 420 : availableSize.Height);
+        }
+
+        var widthDots = Template.Label.Unit == LabelUnit.Millimeter ? Template.Label.Width * DotsPerMillimeter : Template.Label.Width;
+        var heightDots = Template.Label.Unit == LabelUnit.Millimeter ? Template.Label.Height * DotsPerMillimeter : Template.Label.Height;
+        var desiredWidth = Math.Max(0, widthDots * ZoomFactor + 40);
+        var desiredHeight = Math.Max(0, heightDots * ZoomFactor + 40);
+
+        return new Size(desiredWidth, desiredHeight);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        return DesiredSize;
     }
 
     /// <summary>
@@ -399,6 +866,17 @@ public sealed class LabelCanvas : FrameworkElement
     private void DrawWorkspaceSurface(DrawingContext drawingContext, Rect surface)
     {
         drawingContext.DrawRoundedRectangle(_workspaceBrush, _workspaceBorderPen, surface, 18, 18);
+
+        const double gridSpacing = 24.0;
+        for (var x = surface.X + gridSpacing; x < surface.Right; x += gridSpacing)
+        {
+            drawingContext.DrawLine(_workspaceGridPen, new Point(x, surface.Y), new Point(x, surface.Bottom));
+        }
+
+        for (var y = surface.Y + gridSpacing; y < surface.Bottom; y += gridSpacing)
+        {
+            drawingContext.DrawLine(_workspaceGridPen, new Point(surface.X, y), new Point(surface.Right, y));
+        }
     }
 
     /// <summary>
@@ -434,35 +912,31 @@ public sealed class LabelCanvas : FrameworkElement
     }
 
     /// <summary>
-    /// 生成用于裁剪内容的标签内边界，避免图形元素触碰或超出纸张边框。
+    /// 生成用于裁剪内容的标签内边界，避免图形元素超出纸张边框。
     /// </summary>
     private static Rect CreateLabelClipRect(Rect labelRect)
     {
-        var inset = 1.4;
         return new Rect(
-            labelRect.X + inset,
-            labelRect.Y + inset,
-            Math.Max(1, labelRect.Width - inset * 2),
-            Math.Max(1, labelRect.Height - inset * 2));
+            labelRect.X,
+            labelRect.Y,
+            Math.Max(1, labelRect.Width),
+            Math.Max(1, labelRect.Height));
     }
 
     /// <summary>
     /// 根据标签尺寸计算绘制缩放比例和原点位置。
     /// </summary>
-    private static (double scale, Point origin) CalculateScale(Rect surface, LabelDefinition definition)
+    private static (double scale, Point origin) CalculateScale(Rect surface, LabelDefinition definition, double zoomFactor)
     {
         var widthDots = definition.Unit == LabelUnit.Millimeter ? definition.Width * DotsPerMillimeter : definition.Width;
         var heightDots = definition.Unit == LabelUnit.Millimeter ? definition.Height * DotsPerMillimeter : definition.Height;
 
         if (widthDots <= 0 || heightDots <= 0)
         {
-            return (1.0, surface.Location);
+            return (zoomFactor, surface.Location);
         }
 
-        var scale = Math.Min(surface.Width / Math.Max(widthDots, 1), surface.Height / Math.Max(heightDots, 1));
-        var offsetX = surface.X + (surface.Width - widthDots * scale) / 2;
-        var offsetY = surface.Y + (surface.Height - heightDots * scale) / 2;
-        return (scale, new Point(offsetX, offsetY));
+        return (zoomFactor, surface.Location);
     }
 
     private int GetMaxDragCoordinate(LabelElement element, LabelDefinition definition, double scale, bool isHorizontal)
@@ -534,6 +1008,120 @@ public sealed class LabelCanvas : FrameworkElement
         return bounds;
     }
 
+    private TableCellInnerElementHit? GetHitTableCellInnerElement(Point point, double scale, Point origin)
+    {
+        if (Template is null)
+        {
+            return null;
+        }
+
+        foreach (var tableElement in Template.Elements.OfType<TableElement>())
+        {
+            var tableLeft = origin.X + tableElement.X * scale;
+            var tableTop = origin.Y + tableElement.Y * scale;
+            var totalWidth = tableElement.ColumnWidths.Sum() * scale;
+            var totalHeight = tableElement.TotalHeight * scale;
+            var localX = point.X - tableLeft;
+            var localY = point.Y - tableTop;
+
+            if (localX < 0 || localY < 0 || localX > totalWidth || localY > totalHeight)
+            {
+                continue;
+            }
+
+            for (var rowIndex = 0; rowIndex < tableElement.Rows; rowIndex++)
+            {
+                for (var colIndex = 0; colIndex < tableElement.Cols; colIndex++)
+                {
+                    var cellIndex = rowIndex * tableElement.Cols + colIndex;
+                    if (cellIndex >= tableElement.Cells.Count)
+                    {
+                        continue;
+                    }
+
+                    var cell = tableElement.Cells[cellIndex];
+                    var cellLeft = tableLeft + tableElement.ColumnWidths.Take(colIndex).Sum() * scale;
+                    var cellTop = tableTop + tableElement.GetRowHeights().Take(rowIndex).Sum() * scale;
+                    var cellWidth = tableElement.GetColumnWidth(colIndex) * scale;
+                    var cellHeight = tableElement.GetRowHeight(rowIndex) * scale;
+
+                    foreach (var inner in cell.InnerElements)
+                    {
+                        var innerLeft = cellLeft + inner.X * scale;
+                        var innerTop = cellTop + inner.Y * scale;
+                        var innerWidth = Math.Max(1, inner.Width * scale);
+                        var innerHeight = Math.Max(1, inner.Height * scale);
+                        var innerBounds = new Rect(innerLeft, innerTop, innerWidth, innerHeight);
+                        innerBounds.Inflate(HitTestPadding, HitTestPadding);
+
+                        if (innerBounds.Contains(point))
+                        {
+                            return new TableCellInnerElementHit(tableElement, cell, rowIndex, colIndex, inner);
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private TableCellInnerElementResizeHit? GetHitTableCellInnerElementResizeHandle(Point point, double scale, Point origin)
+    {
+        if (Template is null)
+        {
+            return null;
+        }
+
+        foreach (var tableElement in Template.Elements.OfType<TableElement>())
+        {
+            var tableLeft = origin.X + tableElement.X * scale;
+            var tableTop = origin.Y + tableElement.Y * scale;
+            var totalWidth = tableElement.ColumnWidths.Sum() * scale;
+            var totalHeight = tableElement.TotalHeight * scale;
+            var localX = point.X - tableLeft;
+            var localY = point.Y - tableTop;
+
+            if (localX < 0 || localY < 0 || localX > totalWidth || localY > totalHeight)
+            {
+                continue;
+            }
+
+            for (var rowIndex = 0; rowIndex < tableElement.Rows; rowIndex++)
+            {
+                for (var colIndex = 0; colIndex < tableElement.Cols; colIndex++)
+                {
+                    var cellIndex = rowIndex * tableElement.Cols + colIndex;
+                    if (cellIndex >= tableElement.Cells.Count)
+                    {
+                        continue;
+                    }
+
+                    var cell = tableElement.Cells[cellIndex];
+                    var cellLeft = tableLeft + tableElement.ColumnWidths.Take(colIndex).Sum() * scale;
+                    var cellTop = tableTop + tableElement.GetRowHeights().Take(rowIndex).Sum() * scale;
+                    var cellWidth = tableElement.GetColumnWidth(colIndex) * scale;
+                    var cellHeight = tableElement.GetRowHeight(rowIndex) * scale;
+
+                    foreach (var inner in cell.InnerElements)
+                    {
+                        var innerLeft = cellLeft + inner.X * scale;
+                        var innerTop = cellTop + inner.Y * scale;
+                        var innerWidth = Math.Max(1, inner.Width * scale);
+                        var innerHeight = Math.Max(1, inner.Height * scale);
+                        var handleRect = new Rect(innerLeft + innerWidth - TableInnerElementHandleSize, innerTop + innerHeight - TableInnerElementHandleSize, TableInnerElementHandleSize * 2, TableInnerElementHandleSize * 2);
+                        if (handleRect.Contains(point))
+                        {
+                            return new TableCellInnerElementResizeHit(tableElement, cell, rowIndex, colIndex, inner);
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
     private LabelElement? GetHitElement(Point point, double scale, Point origin)
     {
         if (Template is null)
@@ -573,7 +1161,7 @@ public sealed class LabelCanvas : FrameworkElement
             LineElement lineElement => new Rect(origin.X + lineElement.X * scale, origin.Y + lineElement.Y * scale, Math.Max(1, lineElement.Width * scale), Math.Max(1, lineElement.Height * scale)),
             EraseElement eraseElement => new Rect(origin.X + eraseElement.X * scale, origin.Y + eraseElement.Y * scale, Math.Max(1, eraseElement.Width * scale), Math.Max(1, eraseElement.Height * scale)),
             BitmapElement bitmapElement => new Rect(origin.X + bitmapElement.X * scale, origin.Y + bitmapElement.Y * scale, Math.Max(1, bitmapElement.Width * scale), Math.Max(1, bitmapElement.Height * scale)),
-            TableElement tableElement => new Rect(origin.X + tableElement.X * scale, origin.Y + tableElement.Y * scale, Math.Max(1, tableElement.TotalWidth * scale), Math.Max(1, tableElement.Rows * tableElement.RowHeight * scale)),
+            TableElement tableElement => new Rect(origin.X + tableElement.X * scale, origin.Y + tableElement.Y * scale, Math.Max(1, tableElement.TotalWidth * scale), Math.Max(1, tableElement.TotalHeight * scale)),
             _ => new Rect(origin.X + element.X * scale, origin.Y + element.Y * scale, 1, 1),
         };
     }
@@ -797,33 +1385,47 @@ public sealed class LabelCanvas : FrameworkElement
     {
         var left = origin.X + element.X * scale;
         var top = origin.Y + element.Y * scale;
-        var rowHeight = element.RowHeight * scale;
         var totalWidth = Math.Max(1, element.ColumnWidths.Sum() * scale);
-        var totalHeight = Math.Max(1, element.Rows * rowHeight);
+        var totalHeight = Math.Max(1, element.TotalHeight * scale);
         var tableRect = new Rect(left, top, totalWidth, totalHeight);
+        var borderPen = element.BorderStyle == TableLineStyle.Dashed ? _tableBorderPen : new Pen(_tableBorderPen.Brush, _tableBorderPen.Thickness);
 
-        drawingContext.DrawRoundedRectangle(_tableBackgroundBrush, _tableBorderPen, tableRect, 4, 4);
+        drawingContext.DrawRoundedRectangle(_tableBackgroundBrush, borderPen, tableRect, 4, 4);
 
         for (var rowIndex = 0; rowIndex < element.Rows; rowIndex++)
         {
+            var currentRowHeight = element.GetRowHeight(rowIndex) * scale;
             if (rowIndex % 2 == 1)
             {
-                var rowRect = new Rect(left, top + rowIndex * rowHeight, totalWidth, rowHeight);
+                var altRowOffset = element.GetRowHeights().Take(rowIndex).Sum() * scale;
+                var rowRect = new Rect(left, top + altRowOffset, totalWidth, currentRowHeight);
                 drawingContext.DrawRectangle(_tableAlternateRowBrush, null, rowRect);
             }
         }
 
+        var gridPen = element.GridStyle == TableLineStyle.Dashed ? _tableGridPen : new Pen(_tableGridPen.Brush, _tableGridPen.Thickness);
         var currentX = left;
         for (var colIndex = 1; colIndex < element.Cols; colIndex++)
         {
             currentX += element.GetColumnWidth(colIndex - 1) * scale;
-            drawingContext.DrawLine(_tableGridPen, new Point(currentX, top), new Point(currentX, top + totalHeight));
+            drawingContext.DrawLine(gridPen, new Point(currentX, top), new Point(currentX, top + totalHeight));
         }
 
-        for (var rowIndex = 1; rowIndex < element.Rows; rowIndex++)
+        var rowOffset = 0.0;
+        for (var rowIndex = 0; rowIndex < element.Rows - 1; rowIndex++)
         {
-            var y = top + rowIndex * rowHeight;
-            drawingContext.DrawLine(_tableGridPen, new Point(left, y), new Point(left + totalWidth, y));
+            rowOffset += element.GetRowHeight(rowIndex) * scale;
+            drawingContext.DrawLine(gridPen, new Point(left, top + rowOffset), new Point(left + totalWidth, top + rowOffset));
+        }
+
+        if (element.Id == SelectedElementId)
+        {
+            var handleRect = new Rect(
+                left + totalWidth - TableElementCornerHandleSize,
+                top + totalHeight - TableElementCornerHandleSize,
+                TableElementCornerHandleSize,
+                TableElementCornerHandleSize);
+            drawingContext.DrawRectangle(_backgroundBrush, _selectionPen, handleRect);
         }
 
         for (var rowIndex = 0; rowIndex < element.Rows; rowIndex++)
@@ -838,59 +1440,159 @@ public sealed class LabelCanvas : FrameworkElement
 
                 var cell = element.Cells[cellIndex];
                 var cellLeft = left + element.ColumnWidths.Take(colIndex).Sum() * scale;
-                var cellTop = top + rowIndex * rowHeight;
+                var cellTop = top + element.GetRowHeights().Take(rowIndex).Sum() * scale;
                 var cellWidth = element.GetColumnWidth(colIndex) * scale;
-                var cellHeight = rowHeight;
+                var cellHeight = element.GetRowHeight(rowIndex) * scale;
 
-                switch (cell.ContentType)
+                if (cell.InnerElements?.Count > 0)
                 {
-                    case TableCellContentType.Text:
+                    DrawTableCellInnerElements(drawingContext, cell, cellLeft, cellTop, cellWidth, cellHeight, scale);
+                }
+                else
+                {
+                    switch (cell.ContentType)
                     {
-                        var contentRect = new Rect(cellLeft + 8, cellTop + 6, Math.Max(1, cellWidth - 16), Math.Max(1, cellHeight - 12));
-                        var formattedText = new FormattedText(
-                            cell.Content,
-                            CultureInfo.CurrentUICulture,
-                            FlowDirection.LeftToRight,
-                            new Typeface("Microsoft YaHei UI"),
-                            Math.Max(10, 12 * scale),
-                            _foregroundBrush,
-                            VisualTreeHelper.GetDpi(this).PixelsPerDip)
+                        case TableCellContentType.Text:
                         {
-                            MaxTextWidth = contentRect.Width,
-                            MaxTextHeight = contentRect.Height,
-                            TextAlignment = TextAlignment.Center,
-                        };
-                        var textX = contentRect.X + (contentRect.Width - formattedText.Width) / 2;
-                        var textY = contentRect.Y + (contentRect.Height - formattedText.Height) / 2;
-                        drawingContext.DrawText(formattedText, new Point(Math.Max(contentRect.X, textX), Math.Max(contentRect.Y, textY)));
-                        break;
-                    }
-                    case TableCellContentType.Barcode:
-                    {
-                        var availableWidth = Math.Max(1, cellWidth - 16);
-                        var availableHeight = Math.Max(1, cellHeight - 18);
-                        var desiredHeight = Math.Min(availableHeight, 48 * scale);
-                        var barcodeImage = CreateBarcodeImage(MapBarcodeFormat(cell.BarcodeType), string.IsNullOrWhiteSpace(cell.Content) ? " " : cell.Content, (int)Math.Max(1, availableWidth), (int)Math.Max(1, desiredHeight));
-                        var imageWidth = Math.Min(availableWidth, barcodeImage.PixelWidth);
-                        var imageHeight = Math.Min(availableHeight, barcodeImage.PixelHeight);
-                        var drawX = cellLeft + 8 + (availableWidth - imageWidth) / 2;
-                        var drawY = cellTop + 8 + (availableHeight - imageHeight) / 2;
-                        drawingContext.DrawImage(barcodeImage, new Rect(drawX, drawY, imageWidth, imageHeight));
-                        break;
-                    }
-                    case TableCellContentType.QrCode:
-                    {
-                        var availableSize = Math.Min(cellWidth - 16, cellHeight - 16);
-                        var qrSize = Math.Min((int)Math.Floor(availableSize), 120);
-                        var qrImage = CreateQrCodeImage(string.IsNullOrWhiteSpace(cell.Content) ? " " : cell.Content, Math.Max(1, qrSize), cell.QrErrorCorrectionLevel);
-                        var drawX = cellLeft + 8 + (cellWidth - 16 - qrSize) / 2;
-                        var drawY = cellTop + 8 + (cellHeight - 16 - qrSize) / 2;
-                        drawingContext.DrawImage(qrImage, new Rect(drawX, drawY, qrSize, qrSize));
-                        break;
+                            var contentRect = new Rect(cellLeft + 8, cellTop + 6, Math.Max(1, cellWidth - 16), Math.Max(1, cellHeight - 12));
+                            var formattedText = new FormattedText(
+                                cell.Content,
+                                CultureInfo.CurrentUICulture,
+                                FlowDirection.LeftToRight,
+                                new Typeface("Microsoft YaHei UI"),
+                                Math.Max(10, 12 * scale),
+                                _foregroundBrush,
+                                VisualTreeHelper.GetDpi(this).PixelsPerDip)
+                            {
+                                MaxTextWidth = contentRect.Width,
+                                MaxTextHeight = contentRect.Height,
+                                TextAlignment = TextAlignment.Center,
+                            };
+                            var textX = contentRect.X + (contentRect.Width - formattedText.Width) / 2;
+                            var textY = contentRect.Y + (contentRect.Height - formattedText.Height) / 2;
+                            drawingContext.DrawText(formattedText, new Point(Math.Max(contentRect.X, textX), Math.Max(contentRect.Y, textY)));
+                            break;
+                        }
+                        case TableCellContentType.Barcode:
+                        {
+                            var availableWidth = Math.Max(1, cellWidth - 16);
+                            var availableHeight = Math.Max(1, cellHeight - 18);
+                            var desiredHeight = Math.Min(availableHeight, 48 * scale);
+                            var barcodeImage = CreateBarcodeImage(MapBarcodeFormat(cell.BarcodeType), string.IsNullOrWhiteSpace(cell.Content) ? " " : cell.Content, (int)Math.Max(1, availableWidth), (int)Math.Max(1, desiredHeight));
+                            var imageWidth = Math.Min(availableWidth, barcodeImage.PixelWidth);
+                            var imageHeight = Math.Min(availableHeight, barcodeImage.PixelHeight);
+                            var drawX = cellLeft + 8 + (availableWidth - imageWidth) / 2;
+                            var drawY = cellTop + 8 + (availableHeight - imageHeight) / 2;
+                            drawingContext.DrawImage(barcodeImage, new Rect(drawX, drawY, imageWidth, imageHeight));
+                            break;
+                        }
+                        case TableCellContentType.QrCode:
+                        {
+                            var availableSize = Math.Min(cellWidth - 16, cellHeight - 16);
+                            var qrSize = Math.Min((int)Math.Floor(availableSize), 120);
+                            var qrImage = CreateQrCodeImage(string.IsNullOrWhiteSpace(cell.Content) ? " " : cell.Content, Math.Max(1, qrSize), cell.QrErrorCorrectionLevel);
+                            var drawX = cellLeft + 8 + (cellWidth - 16 - qrSize) / 2;
+                            var drawY = cellTop + 8 + (cellHeight - 16 - qrSize) / 2;
+                            drawingContext.DrawImage(qrImage, new Rect(drawX, drawY, qrSize, qrSize));
+                            break;
+                        }
                     }
                 }
             }
         }
+    }
+
+    private void DrawTableCellInnerElements(DrawingContext drawingContext, TableCell cell, double cellLeft, double cellTop, double cellWidth, double cellHeight, double scale)
+    {
+        var cellClip = new Rect(cellLeft, cellTop, cellWidth, cellHeight);
+        drawingContext.PushClip(new RectangleGeometry(cellClip));
+
+        foreach (var innerElement in cell.InnerElements)
+        {
+            var startX = cellLeft + innerElement.X * scale;
+            var startY = cellTop + innerElement.Y * scale;
+            var innerWidth = Math.Max(1, innerElement.Width * scale);
+            var innerHeight = Math.Max(1, innerElement.Height * scale);
+            var innerRect = new Rect(startX, startY, innerWidth, innerHeight);
+
+            if (_selectedTableCellInnerElementId == innerElement.Id)
+            {
+                drawingContext.DrawRectangle(null, _selectionPen, innerRect);
+            }
+
+            switch (innerElement)
+            {
+                case TableCellTextElement textElement:
+                {
+                    var contentRect = new Rect(startX + 4, startY + 4, Math.Max(1, innerWidth - 8), Math.Max(1, innerHeight - 8));
+                    var formattedText = new FormattedText(
+                        string.IsNullOrEmpty(textElement.Content) ? " " : textElement.Content,
+                        CultureInfo.CurrentUICulture,
+                        FlowDirection.LeftToRight,
+                        new Typeface("Microsoft YaHei UI"),
+                        Math.Max(8, 10 * scale),
+                        _foregroundBrush,
+                        VisualTreeHelper.GetDpi(this).PixelsPerDip)
+                    {
+                        MaxTextWidth = contentRect.Width,
+                        MaxTextHeight = contentRect.Height,
+                        Trimming = TextTrimming.CharacterEllipsis,
+                        TextAlignment = TextAlignment.Center,
+                    };
+
+                    var textX = contentRect.X + (contentRect.Width - formattedText.Width) / 2;
+                    var textY = contentRect.Y + (contentRect.Height - formattedText.Height) / 2;
+                    DrawWithRotation(drawingContext, textElement.Rotation, new Point(startX, startY), () =>
+                    {
+                        drawingContext.DrawText(formattedText, new Point(Math.Max(contentRect.X, textX), Math.Max(contentRect.Y, textY)));
+                    });
+                    break;
+                }
+                case TableCellBarcodeElement barcodeElement:
+                {
+                    var availableWidth = Math.Max(1, innerWidth - 8);
+                    var availableHeight = Math.Max(1, innerHeight - 8);
+                    var desiredHeight = Math.Min(availableHeight, 48 * scale);
+                    var barcodeImage = CreateBarcodeImage(MapBarcodeFormat(barcodeElement.BarcodeType), string.IsNullOrWhiteSpace(barcodeElement.Content) ? " " : barcodeElement.Content, (int)Math.Max(1, availableWidth), (int)Math.Max(1, desiredHeight));
+                    var imageWidth = Math.Min(availableWidth, barcodeImage.PixelWidth);
+                    var imageHeight = Math.Min(availableHeight, barcodeImage.PixelHeight);
+                    var drawX = startX + 4 + (availableWidth - imageWidth) / 2;
+                    var drawY = startY + 4 + (availableHeight - imageHeight) / 2;
+
+                    DrawWithRotation(drawingContext, barcodeElement.Rotation, new Point(startX, startY), () =>
+                    {
+                        drawingContext.DrawImage(barcodeImage, new Rect(drawX, drawY, imageWidth, imageHeight));
+                    });
+                    break;
+                }
+                case TableCellQrCodeElement qrCodeElement:
+                {
+                    var availableSize = Math.Min(innerWidth - 8, innerHeight - 8);
+                    var qrSize = Math.Max(1, (int)Math.Min(availableSize, 120));
+                    var qrImage = CreateQrCodeImage(string.IsNullOrWhiteSpace(qrCodeElement.Content) ? " " : qrCodeElement.Content, qrSize, qrCodeElement.ErrorCorrectionLevel);
+                    var drawX = startX + 4 + (innerWidth - 8 - qrSize) / 2;
+                    var drawY = startY + 4 + (innerHeight - 8 - qrSize) / 2;
+
+                    DrawWithRotation(drawingContext, qrCodeElement.Rotation, new Point(startX, startY), () =>
+                    {
+                        drawingContext.DrawImage(qrImage, new Rect(drawX, drawY, qrSize, qrSize));
+                    });
+                    break;
+                }
+            }
+
+            if (_selectedTableCellInnerElementId == innerElement.Id)
+            {
+                var handleRect = new Rect(
+                    innerRect.Right - TableInnerElementHandleSize,
+                    innerRect.Bottom - TableInnerElementHandleSize,
+                    TableInnerElementHandleSize,
+                    TableInnerElementHandleSize);
+                drawingContext.DrawRectangle(_backgroundBrush, _selectionPen, handleRect);
+            }
+        }
+
+        drawingContext.Pop();
     }
 
     /// <summary>

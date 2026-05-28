@@ -150,17 +150,41 @@ public sealed class TableElementTsplWriter : IElementTsplWriter
                 var cellX = columnOffsetX + 8;
                 var cellY = rowOffsetY;
 
-                switch (cell.ContentType)
+                if (cell.InnerElements.Count > 0)
                 {
-                    case TableCellContentType.Text:
-                        commands.Add($"TEXT {cellX},{cellY},\"3\",0,1,1,\"{TsplValueFormatter.Escape(cell.Content)}\"");
-                        break;
-                    case TableCellContentType.Barcode:
-                        commands.Add($"BARCODE {cellX},{cellY},\"{TsplValueFormatter.MapBarcodeType(cell.BarcodeType)}\",80,1,0,2,2,\"{TsplValueFormatter.Escape(cell.Content)}\"");
-                        break;
-                    case TableCellContentType.QrCode:
-                        commands.Add($"QRCODE {cellX},{cellY},{cell.QrErrorCorrectionLevel},{cell.QrCellWidth},{cell.QrMode},0,\"{TsplValueFormatter.Escape(cell.Content)}\"");
-                        break;
+                    foreach (var inner in cell.InnerElements)
+                    {
+                        var innerX = cellX + inner.X;
+                        var innerY = cellY + inner.Y;
+
+                        switch (inner)
+                        {
+                            case TableCellTextElement textElement:
+                                commands.Add($"TEXT {innerX},{innerY},\"3\",0,1,1,\"{TsplValueFormatter.Escape(textElement.Content)}\"");
+                                break;
+                            case TableCellBarcodeElement barcodeElement:
+                                commands.Add($"BARCODE {innerX},{innerY},\"{TsplValueFormatter.MapBarcodeType(barcodeElement.BarcodeType)}\",{Math.Max(20, barcodeElement.Height)},{(barcodeElement.Readable ? 1 : 0)},{barcodeElement.Rotation},{barcodeElement.Narrow},{barcodeElement.Wide},\"{TsplValueFormatter.Escape(barcodeElement.Content)}\"");
+                                break;
+                            case TableCellQrCodeElement qrCodeElement:
+                                commands.Add($"QRCODE {innerX},{innerY},{qrCodeElement.ErrorCorrectionLevel},{qrCodeElement.CellWidth},{qrCodeElement.Mode},{qrCodeElement.Rotation},\"{TsplValueFormatter.Escape(qrCodeElement.Content)}\"");
+                                break;
+                        }
+                    }
+                }
+                else
+                {
+                    switch (cell.ContentType)
+                    {
+                        case TableCellContentType.Text:
+                            commands.Add($"TEXT {cellX},{cellY},\"3\",0,1,1,\"{TsplValueFormatter.Escape(cell.Content)}\"");
+                            break;
+                        case TableCellContentType.Barcode:
+                            commands.Add($"BARCODE {cellX},{cellY},\"{TsplValueFormatter.MapBarcodeType(cell.BarcodeType)}\",80,1,0,2,2,\"{TsplValueFormatter.Escape(cell.Content)}\"");
+                            break;
+                        case TableCellContentType.QrCode:
+                            commands.Add($"QRCODE {cellX},{cellY},{cell.QrErrorCorrectionLevel},{cell.QrCellWidth},{cell.QrMode},0,\"{TsplValueFormatter.Escape(cell.Content)}\"");
+                            break;
+                    }
                 }
 
                 columnOffsetX += table.GetColumnWidth(col);

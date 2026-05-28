@@ -184,6 +184,96 @@ public enum TableCellContentType
 }
 
 /// <summary>
+/// 表示表格线风格。
+/// </summary>
+public enum TableLineStyle
+{
+    Solid,
+    Dashed,
+}
+
+/// <summary>
+/// 表示单元格内部可拖拽的元素。
+/// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(TableCellTextElement), "tableCellText")]
+[JsonDerivedType(typeof(TableCellBarcodeElement), "tableCellBarcode")]
+[JsonDerivedType(typeof(TableCellQrCodeElement), "tableCellQrCode")]
+public abstract class TableCellInnerElement
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+    public int X { get; set; }
+
+    public int Y { get; set; }
+
+    public int Width { get; set; } = 120;
+
+    public int Height { get; set; } = 40;
+
+    public int Rotation { get; set; }
+}
+
+/// <summary>
+/// 表示单元格内部文本元素。
+/// </summary>
+public sealed class TableCellTextElement : TableCellInnerElement
+{
+    public string Content { get; set; } = string.Empty;
+
+    public string Font { get; set; } = "3";
+
+    public int XScale { get; set; } = 1;
+
+    public int YScale { get; set; } = 1;
+
+    public override string ToString()
+    {
+        return $"单元格文本: {Content}";
+    }
+}
+
+/// <summary>
+/// 表示单元格内部条码元素。
+/// </summary>
+public sealed class TableCellBarcodeElement : TableCellInnerElement
+{
+    public BarcodeType BarcodeType { get; set; } = BarcodeType.Code128;
+
+    public int Narrow { get; set; } = 2;
+
+    public int Wide { get; set; } = 2;
+
+    public bool Readable { get; set; } = true;
+
+    public string Content { get; set; } = string.Empty;
+
+    public override string ToString()
+    {
+        return $"单元格条码: {Content}";
+    }
+}
+
+/// <summary>
+/// 表示单元格内部二维码元素。
+/// </summary>
+public sealed class TableCellQrCodeElement : TableCellInnerElement
+{
+    public string ErrorCorrectionLevel { get; set; } = "L";
+
+    public int CellWidth { get; set; } = 5;
+
+    public string Mode { get; set; } = "A";
+
+    public string Content { get; set; } = string.Empty;
+
+    public override string ToString()
+    {
+        return $"单元格二维码: {Content}";
+    }
+}
+
+/// <summary>
 /// 表示表格元素内的一个单元格。
 /// </summary>
 public sealed class TableCell
@@ -199,6 +289,48 @@ public sealed class TableCell
     public string QrMode { get; set; } = "A";
 
     public string QrErrorCorrectionLevel { get; set; } = "L";
+
+    public List<TableCellInnerElement> InnerElements { get; set; } = new();
+
+    public bool HasLegacyContent => InnerElements.Count == 0;
+
+    public void MigrateLegacyContentToInnerElements()
+    {
+        if (!HasLegacyContent)
+        {
+            return;
+        }
+
+        switch (ContentType)
+        {
+            case TableCellContentType.Text:
+                InnerElements.Add(new TableCellTextElement
+                {
+                    Content = Content,
+                    Font = "3",
+                });
+                break;
+            case TableCellContentType.Barcode:
+                InnerElements.Add(new TableCellBarcodeElement
+                {
+                    Content = Content,
+                    BarcodeType = BarcodeType,
+                    Readable = true,
+                    Narrow = 2,
+                    Wide = 2,
+                });
+                break;
+            case TableCellContentType.QrCode:
+                InnerElements.Add(new TableCellQrCodeElement
+                {
+                    Content = Content,
+                    ErrorCorrectionLevel = QrErrorCorrectionLevel,
+                    CellWidth = QrCellWidth,
+                    Mode = QrMode,
+                });
+                break;
+        }
+    }
 }
 
 /// <summary>
@@ -212,11 +344,40 @@ public sealed class TableElement : LabelElement
 
     public int RowHeight { get; set; } = 100;
 
+    public List<int> RowHeights { get; set; } = new() { 100, 100 };
+
     public List<int> ColumnWidths { get; set; } = new() { 260, 260 };
 
     public List<TableCell> Cells { get; set; } = CreateDefaultCells(2, 2);
 
+    public TableLineStyle BorderStyle { get; set; } = TableLineStyle.Dashed;
+
+    public TableLineStyle GridStyle { get; set; } = TableLineStyle.Dashed;
+
     public int TotalWidth => ColumnWidths.Sum();
+
+    public int TotalHeight => GetRowHeights().Sum();
+
+    public int GetRowHeight(int index)
+    {
+        if (index < 0)
+        {
+            return 0;
+        }
+
+        var rowHeights = GetRowHeights();
+        return index < rowHeights.Count ? rowHeights[index] : rowHeights.LastOrDefault();
+    }
+
+    public IReadOnlyList<int> GetRowHeights()
+    {
+        if (RowHeights is null || RowHeights.Count != Rows)
+        {
+            EnsureRowHeights();
+        }
+
+        return RowHeights;
+    }
 
     public int GetColumnWidth(int index)
     {
@@ -240,6 +401,8 @@ public sealed class TableElement : LabelElement
         {
             Cells.RemoveRange(required, Cells.Count - required);
         }
+
+        EnsureRowHeights();
     }
 
     public void InsertRowAt(int rowIndex)
@@ -253,6 +416,8 @@ public sealed class TableElement : LabelElement
         var newCells = CreateDefaultCells(1, Cols);
         Cells.InsertRange(insertIndex, newCells);
         Rows++;
+        var defaultHeight = RowHeights.Count > 0 ? RowHeights[Math.Min(rowIndex, RowHeights.Count - 1)] : RowHeight;
+        RowHeights.Insert(rowIndex, defaultHeight);
     }
 
     public void InsertColumnAt(int columnIndex)
@@ -284,6 +449,10 @@ public sealed class TableElement : LabelElement
         var removeIndex = rowIndex * Cols;
         Cells.RemoveRange(removeIndex, Cols);
         Rows--;
+        if (rowIndex < RowHeights.Count)
+        {
+            RowHeights.RemoveAt(rowIndex);
+        }
     }
 
     public void RemoveColumnAt(int columnIndex)
@@ -302,6 +471,24 @@ public sealed class TableElement : LabelElement
         }
 
         Cols--;
+    }
+
+    private void EnsureRowHeights()
+    {
+        if (RowHeights is null)
+        {
+            RowHeights = new List<int>(Rows);
+        }
+
+        while (RowHeights.Count < Rows)
+        {
+            RowHeights.Add(RowHeight);
+        }
+
+        if (RowHeights.Count > Rows)
+        {
+            RowHeights.RemoveRange(Rows, RowHeights.Count - Rows);
+        }
     }
 
     private static List<TableCell> CreateDefaultCells(int rows, int cols)
@@ -352,10 +539,34 @@ public enum TableCellContextMenuAction
     AddColumnLeft,
     AddColumnRight,
     RemoveColumn,
+    AddCellTextElement,
+    AddCellBarcodeElement,
+    AddCellQrCodeElement,
     EditCell,
+    EditCellInnerElement,
+    RemoveCellInnerElement,
 }
 
 /// <summary>
 /// 视图层通过画布拖动时传递的元素移动请求。
 /// </summary>
 public sealed record ElementMoveRequest(string ElementId, int X, int Y);
+
+/// <summary>
+/// 表示单元格内部元素移动请求。
+/// </summary>
+public sealed record TableCellInnerElementMoveRequest(string TableElementId, int Row, int Column, string InnerElementId, int X, int Y, int Width, int Height);
+
+/// <summary>
+/// 表示表格行或列大小调整请求。
+/// </summary>
+public enum TableCellResizeMode
+{
+    Column,
+    Row,
+}
+
+/// <summary>
+/// 表示表格行高或列宽调整请求。
+/// </summary>
+public sealed record TableCellResizeRequest(string TableElementId, TableCellResizeMode Mode, int Index, int NewSize, IReadOnlyList<int>? RowHeights = null);
