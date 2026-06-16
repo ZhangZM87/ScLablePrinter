@@ -62,35 +62,89 @@ public sealed class TsplTableElementWriter : IElementWriter
     }
 
     /// <summary>
-    /// 绘制表格内部网格线（支持虚线）。
+    /// 绘制表格内部网格线（支持虚线），正确处理合并单元格。
+    /// 竖线：仅在确认有 ColSpan 跨越时跳过。
+    /// 横线：仅在确认有 RowSpan 跨越时跳过。
     /// </summary>
     private static void WriteGridLines(TableElement table, ICommandBuilder builder, int totalWidth, int totalHeight)
     {
         var style = table.GridStyle;
         const int thickness = 1;
+        var rowHeights = table.GetRowHeights();
 
         // 垂直网格线（列分隔）
-        var currentX = table.X;
-        for (var col = 0; col < table.Cols - 1; col++)
+        for (var colIndex = 1; colIndex < table.Cols; colIndex++)
         {
-            currentX += table.GetColumnWidth(col);
-            foreach (var seg in DashSegmentCalculator.CalculateVerticalSegments(
-                currentX, table.Y, totalHeight, thickness, style))
+            var currentX = table.X + table.ColumnWidths.Take(colIndex).Sum();
+            var segY = table.Y;
+            for (var row = 0; row < table.Rows; row++)
             {
-                builder.AppendLine($"BAR {seg.X},{seg.Y},{seg.Width},{seg.Height}");
+                var rowH = rowHeights[row];
+                var skip = false;
+
+                // 向左查找是否有 ColSpan 跨越此列边界
+                for (var scanCol = colIndex - 1; scanCol >= 0; scanCol--)
+                {
+                    var scanIdx = row * table.Cols + scanCol;
+                    if (scanIdx >= 0 && scanIdx < table.Cells.Count)
+                    {
+                        var scanCell = table.Cells[scanIdx];
+                        if (!scanCell.IsMerged && scanCell.ColSpan > 1)
+                        {
+                            if (scanCol + scanCell.ColSpan > colIndex) skip = true;
+                            break;
+                        }
+                        if (!scanCell.IsMerged) break;
+                    }
+                }
+
+                if (!skip)
+                {
+                    foreach (var seg in DashSegmentCalculator.CalculateVerticalSegments(
+                        currentX, segY, rowH, thickness, style))
+                    {
+                        builder.AppendLine($"BAR {seg.X},{seg.Y},{seg.Width},{seg.Height}");
+                    }
+                }
+                segY += rowH;
             }
         }
 
         // 水平网格线（行分隔）
-        var rowHeights = table.GetRowHeights();
-        var currentY = table.Y;
-        for (var row = 0; row < table.Rows - 1; row++)
+        for (var rowIndex = 0; rowIndex < table.Rows - 1; rowIndex++)
         {
-            currentY += rowHeights[row];
-            foreach (var seg in DashSegmentCalculator.CalculateHorizontalSegments(
-                table.X, currentY, totalWidth, thickness, style))
+            var currentY = table.Y + rowHeights.Take(rowIndex + 1).Sum();
+            var segX = table.X;
+            for (var col = 0; col < table.Cols; col++)
             {
-                builder.AppendLine($"BAR {seg.X},{seg.Y},{seg.Width},{seg.Height}");
+                var colW = table.GetColumnWidth(col);
+                var skip = false;
+
+                // 向上查找是否有 RowSpan 跨越此行边界
+                for (var scanRow = rowIndex; scanRow >= 0; scanRow--)
+                {
+                    var scanIdx = scanRow * table.Cols + col;
+                    if (scanIdx >= 0 && scanIdx < table.Cells.Count)
+                    {
+                        var scanCell = table.Cells[scanIdx];
+                        if (!scanCell.IsMerged && scanCell.RowSpan > 1)
+                        {
+                            if (scanRow + scanCell.RowSpan > rowIndex + 1) skip = true;
+                            break;
+                        }
+                        if (!scanCell.IsMerged) break;
+                    }
+                }
+
+                if (!skip)
+                {
+                    foreach (var seg in DashSegmentCalculator.CalculateHorizontalSegments(
+                        segX, currentY, colW, thickness, style))
+                    {
+                        builder.AppendLine($"BAR {seg.X},{seg.Y},{seg.Width},{seg.Height}");
+                    }
+                }
+                segX += colW;
             }
         }
     }

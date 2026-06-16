@@ -368,6 +368,21 @@ public sealed class TableCellQrCodeElement : TableCellInnerElement
 /// </summary>
 public sealed class TableCell
 {
+    /// <summary>
+    /// 列合并数（1=不合并，2=跨2列，以此类推）。
+    /// </summary>
+    public int ColSpan { get; set; } = 1;
+
+    /// <summary>
+    /// 行合并数（1=不合并，2=跨2行，以此类推）。
+    /// </summary>
+    public int RowSpan { get; set; } = 1;
+
+    /// <summary>
+    /// 是否被其他单元格合并覆盖（被合并的单元格不渲染）。
+    /// </summary>
+    public bool IsMerged { get; set; }
+
     public TableCellContentType ContentType { get; set; } = TableCellContentType.Text;
 
     /// <summary>
@@ -609,6 +624,63 @@ public sealed class TableElement : LabelElement, IResizable
     }
 
     /// <summary>
+    /// 合并从 (startRow, startCol) 开始的 rowSpan x colSpan 区域。
+    /// </summary>
+    public void MergeCells(int startRow, int startCol, int rowSpan, int colSpan)
+    {
+        if (startRow < 0 || startCol < 0 || rowSpan < 1 || colSpan < 1) return;
+        if (startRow + rowSpan > Rows || startCol + colSpan > Cols) return;
+
+        var anchor = Cells[startRow * Cols + startCol];
+        anchor.ColSpan = colSpan;
+        anchor.RowSpan = rowSpan;
+        anchor.IsMerged = false;
+
+        for (var r = startRow; r < startRow + rowSpan; r++)
+        {
+            for (var col = startCol; col < startCol + colSpan; col++)
+            {
+                if (r == startRow && col == startCol) continue;
+                var idx = r * Cols + col;
+                if (idx < Cells.Count)
+                {
+                    Cells[idx].IsMerged = true;
+                    Cells[idx].ColSpan = 1;
+                    Cells[idx].RowSpan = 1;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 拆分指定位置的合并单元格。
+    /// </summary>
+    public void UnmergeCells(int row, int col)
+    {
+        if (row < 0 || col < 0 || row >= Rows || col >= Cols) return;
+        var cell = Cells[row * Cols + col];
+        if (cell.ColSpan <= 1 && cell.RowSpan <= 1) return;
+
+        var rowSpan = cell.RowSpan;
+        var colSpan = cell.ColSpan;
+        cell.ColSpan = 1;
+        cell.RowSpan = 1;
+
+        for (var r = row; r < row + rowSpan && r < Rows; r++)
+        {
+            for (var c = col; c < col + colSpan && c < Cols; c++)
+            {
+                if (r == row && c == col) continue;
+                var idx = r * Cols + c;
+                if (idx < Cells.Count)
+                {
+                    Cells[idx].IsMerged = false;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// 返回适合界面列表展示的表格元素摘要。
     /// </summary>
     public override string ToString()
@@ -648,6 +720,9 @@ public enum TableCellContextMenuAction
     EditCell,
     EditCellInnerElement,
     RemoveCellInnerElement,
+    MergeCellRight,
+    MergeCellDown,
+    UnmergeCell,
 }
 
 /// <summary>

@@ -77,7 +77,7 @@ public partial class FilePrintViewModel : ObservableObject
     [RelayCommand]
     private async Task BrowseFileAsync()
     {
-        if (_fileDialogService.TryOpenFile("支持文件|*.sclabel;*.prn;*.bin;*.txt|所有文件|*.*", out var path))
+        if (_fileDialogService.TryOpenFile("支持文件|*.sclabel;*.tspl;*.prn;*.bin;*.txt|所有文件|*.*", out var path))
         {
             FilePath = path;
             PayloadSummary = $"待打印文件: {Path.GetFileName(path)}";
@@ -101,6 +101,24 @@ public partial class FilePrintViewModel : ObservableObject
                 var template = await _labelTemplateStorageService.LoadAsync(path);
                 FilePreviewTemplate = template;
                 FilePreview = "已解析标签模板，图形预览已加载。";
+            }
+            else if (extension == ".tspl")
+            {
+                string tsplText;
+                using (var reader = new System.IO.StreamReader(path, System.Text.Encoding.GetEncoding("GB2312"), detectEncodingFromByteOrderMarks: true))
+                {
+                    tsplText = await reader.ReadToEndAsync();
+                }
+                if (_tsplParser.TryParse(tsplText, out var tsplTemplate))
+                {
+                    FilePreviewTemplate = tsplTemplate;
+                    FilePreview = tsplText;
+                }
+                else
+                {
+                    FilePreviewTemplate = null;
+                    FilePreview = tsplText;
+                }
             }
             else if (extension is ".txt" or ".prn" or ".bin")
             {

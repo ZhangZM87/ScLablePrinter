@@ -341,6 +341,15 @@ public sealed class TsplParser : ITsplParser
             return;
         }
 
+        var content = TrimQuotes(args[6]);
+        var placeholder = string.Empty;
+
+        if (content.StartsWith("{{") && content.EndsWith("}}") && content.Length > 4)
+        {
+            placeholder = content[2..^2];
+            content = placeholder;
+        }
+
         document.Elements.Add(new TextElement
         {
             X = ParseInt(args[0]),
@@ -349,7 +358,8 @@ public sealed class TsplParser : ITsplParser
             Rotation = ParseInt(args[3]),
             XScale = ParseInt(args[4], 1),
             YScale = ParseInt(args[5], 1),
-            Content = TrimQuotes(args[6]),
+            Content = content,
+            Placeholder = placeholder,
         });
     }
 
@@ -359,6 +369,15 @@ public sealed class TsplParser : ITsplParser
         if (args.Length < 9)
         {
             return;
+        }
+
+        var content = TrimQuotes(args[8]);
+        var placeholder = string.Empty;
+
+        if (content.StartsWith("{{") && content.EndsWith("}}") && content.Length > 4)
+        {
+            placeholder = content[2..^2];
+            content = "0000";
         }
 
         document.Elements.Add(new BarcodeElement
@@ -371,7 +390,8 @@ public sealed class TsplParser : ITsplParser
             Rotation = ParseInt(args[5]),
             Narrow = ParseInt(args[6], 2),
             Wide = ParseInt(args[7], 2),
-            Content = TrimQuotes(args[8]),
+            Content = content,
+            Placeholder = placeholder,
         });
     }
 
@@ -438,6 +458,15 @@ public sealed class TsplParser : ITsplParser
             return;
         }
 
+        var content = TrimQuotes(args[6]);
+        var placeholder = string.Empty;
+
+        if (content.StartsWith("{{") && content.EndsWith("}}") && content.Length > 4)
+        {
+            placeholder = content[2..^2];
+            content = placeholder;
+        }
+
         document.Elements.Add(new QrCodeElement
         {
             X = ParseInt(args[0]),
@@ -446,7 +475,8 @@ public sealed class TsplParser : ITsplParser
             CellWidth = ParseInt(args[3], 5),
             Mode = TrimQuotes(args[4]),
             Rotation = ParseInt(args[5]),
-            Content = TrimQuotes(args[6]),
+            Content = content,
+            Placeholder = placeholder,
         });
     }
 

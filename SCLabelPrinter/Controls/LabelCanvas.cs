@@ -235,6 +235,21 @@ public sealed class LabelCanvas : FrameworkElement
         typeof(LabelCanvas),
         new FrameworkPropertyMetadata(null));
 
+    public static readonly DependencyProperty IsPreviewOnlyProperty = DependencyProperty.Register(
+        nameof(IsPreviewOnly),
+        typeof(bool),
+        typeof(LabelCanvas),
+        new PropertyMetadata(false));
+
+    /// <summary>
+    /// 预览模式下禁止选中、拖拽、编辑等所有交互操作。
+    /// </summary>
+    public bool IsPreviewOnly
+    {
+        get => (bool)GetValue(IsPreviewOnlyProperty);
+        set => SetValue(IsPreviewOnlyProperty, value);
+    }
+
     public static readonly DependencyProperty ZoomFactorProperty = DependencyProperty.Register(
         nameof(ZoomFactor),
         typeof(double),
@@ -440,7 +455,7 @@ public sealed class LabelCanvas : FrameworkElement
     {
         base.OnMouseLeftButtonDown(e);
 
-        if (Template is null)
+        if (Template is null || IsPreviewOnly)
         {
             return;
         }
@@ -619,7 +634,7 @@ public sealed class LabelCanvas : FrameworkElement
     {
         base.OnMouseRightButtonDown(e);
 
-        if (Template is null)
+        if (Template is null || IsPreviewOnly)
         {
             return;
         }
@@ -678,6 +693,11 @@ public sealed class LabelCanvas : FrameworkElement
         contextMenu.Items.Add(CreateMenuItem("添加单元格文本元素", TableCellContextMenuAction.AddCellTextElement, tableElement, cell.Value.Row, cell.Value.Column));
         contextMenu.Items.Add(CreateMenuItem("添加单元格条码元素", TableCellContextMenuAction.AddCellBarcodeElement, tableElement, cell.Value.Row, cell.Value.Column));
         contextMenu.Items.Add(CreateMenuItem("添加单元格二维码元素", TableCellContextMenuAction.AddCellQrCodeElement, tableElement, cell.Value.Row, cell.Value.Column));
+
+        contextMenu.Items.Add(new Separator());
+        contextMenu.Items.Add(CreateMenuItem("向右合并单元格", TableCellContextMenuAction.MergeCellRight, tableElement, cell.Value.Row, cell.Value.Column));
+        contextMenu.Items.Add(CreateMenuItem("向下合并单元格", TableCellContextMenuAction.MergeCellDown, tableElement, cell.Value.Row, cell.Value.Column));
+        contextMenu.Items.Add(CreateMenuItem("拆分合并", TableCellContextMenuAction.UnmergeCell, tableElement, cell.Value.Row, cell.Value.Column));
 
         contextMenu.IsOpen = true;
 
@@ -1904,14 +1924,64 @@ public sealed class LabelCanvas : FrameworkElement
         for (var colIndex = 1; colIndex < element.Cols; colIndex++)
         {
             currentX += element.GetColumnWidth(colIndex - 1) * scale;
-            drawingContext.DrawLine(gridPen, new Point(currentX, top), new Point(currentX, top + totalHeight));
+            var colLineY = top;
+            for (var row = 0; row < element.Rows; row++)
+            {
+                var rowH = element.GetRowHeight(row) * scale;
+                var skipSegment = false;
+                // 只有确认存在 ColSpan 跨越此列边界时才跳过竖线
+                for (var scanCol = colIndex - 1; scanCol >= 0; scanCol--)
+                {
+                    var scanIdx = row * element.Cols + scanCol;
+                    if (scanIdx >= 0 && scanIdx < element.Cells.Count)
+                    {
+                        var scanCell = element.Cells[scanIdx];
+                        if (!scanCell.IsMerged && scanCell.ColSpan > 1)
+                        {
+                            if (scanCol + scanCell.ColSpan > colIndex) skipSegment = true;
+                            break;
+                        }
+                        if (!scanCell.IsMerged) break;
+                    }
+                }
+                if (!skipSegment)
+                {
+                    drawingContext.DrawLine(gridPen, new Point(currentX, colLineY), new Point(currentX, colLineY + rowH));
+                }
+                colLineY += rowH;
+            }
         }
 
         var rowOffset = 0.0;
         for (var rowIndex = 0; rowIndex < element.Rows - 1; rowIndex++)
         {
             rowOffset += element.GetRowHeight(rowIndex) * scale;
-            drawingContext.DrawLine(gridPen, new Point(left, top + rowOffset), new Point(left + totalWidth, top + rowOffset));
+            var rowLineX = left;
+            for (var col = 0; col < element.Cols; col++)
+            {
+                var colW = element.GetColumnWidth(col) * scale;
+                var skipSegment = false;
+                // 只有确认存在 RowSpan 跨越此行边界时才跳过横线
+                for (var scanRow = rowIndex; scanRow >= 0; scanRow--)
+                {
+                    var scanIdx = scanRow * element.Cols + col;
+                    if (scanIdx >= 0 && scanIdx < element.Cells.Count)
+                    {
+                        var scanCell = element.Cells[scanIdx];
+                        if (!scanCell.IsMerged && scanCell.RowSpan > 1)
+                        {
+                            if (scanRow + scanCell.RowSpan > rowIndex + 1) skipSegment = true;
+                            break;
+                        }
+                        if (!scanCell.IsMerged) break;
+                    }
+                }
+                if (!skipSegment)
+                {
+                    drawingContext.DrawLine(gridPen, new Point(rowLineX, top + rowOffset), new Point(rowLineX + colW, top + rowOffset));
+                }
+                rowLineX += colW;
+            }
         }
 
         if (element.Id == SelectedElementId)
@@ -1935,7 +2005,22 @@ public sealed class LabelCanvas : FrameworkElement
                 }
 
                 var cell = element.Cells[cellIndex];
-                var cellBounds = GetTableCellScreenBounds(element, rowIndex, colIndex, scale, origin);
+                if (cell.IsMerged) continue;
+                var mergedBounds = TableCellLayoutCalculator.GetMergedCellBounds(element, rowIndex, colIndex);
+                if (cell.ColSpan > 1 || cell.RowSpan > 1)
+                {
+                    var mergeFillRect = new Rect(
+                        origin.X + (element.X + mergedBounds.X) * scale + 1,
+                        origin.Y + (element.Y + mergedBounds.Y) * scale + 1,
+                        Math.Max(1, mergedBounds.Width * scale - 2),
+                        Math.Max(1, mergedBounds.Height * scale - 2));
+                    drawingContext.DrawRectangle(_tableBackgroundBrush, null, mergeFillRect);
+                }
+                var cellBounds = new Rect(
+                    origin.X + (element.X + mergedBounds.X) * scale,
+                    origin.Y + (element.Y + mergedBounds.Y) * scale,
+                    Math.Max(1, mergedBounds.Width * scale),
+                    Math.Max(1, mergedBounds.Height * scale));
                 var cellLeft = cellBounds.X;
                 var cellTop = cellBounds.Y;
                 var cellWidth = cellBounds.Width;

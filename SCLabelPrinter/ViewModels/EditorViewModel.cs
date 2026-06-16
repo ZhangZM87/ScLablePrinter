@@ -441,7 +441,7 @@ public partial class EditorViewModel : ObservableObject
             var templateExporter = new TsplTemplateExporter();
             var template = BuildTemplateSnapshot();
             var tsplTemplate = templateExporter.ExportTemplate(template, new ExportOptions { Copies = 1, Density = Density });
-            System.IO.File.WriteAllText(path, tsplTemplate, System.Text.Encoding.GetEncoding("GB2312"));
+            System.IO.File.WriteAllText(path, tsplTemplate, new System.Text.UTF8Encoding(true));
 
             var placeholders = templateExporter.GetPlaceholderList(template, new ExportOptions { Copies = 1, Density = Density });
             if (placeholders.Count > 0)
@@ -772,6 +772,15 @@ public partial class EditorViewModel : ObservableObject
                 return;
             case TableCellContextMenuAction.RemoveCellInnerElement:
                 RemoveCellInnerElement(tableElement, request.Row, request.Column);
+                break;
+            case TableCellContextMenuAction.MergeCellRight:
+                tableElement.MergeCells(request.Row, request.Column, 1, tableElement.Cols - request.Column);
+                break;
+            case TableCellContextMenuAction.MergeCellDown:
+                tableElement.MergeCells(request.Row, request.Column, tableElement.Rows - request.Row, 1);
+                break;
+            case TableCellContextMenuAction.UnmergeCell:
+                tableElement.UnmergeCells(request.Row, request.Column);
                 break;
             default:
                 return;

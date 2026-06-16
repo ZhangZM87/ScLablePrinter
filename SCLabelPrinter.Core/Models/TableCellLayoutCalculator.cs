@@ -39,6 +39,41 @@ public static class TableCellLayoutCalculator
     }
 
     /// <summary>
+    /// 获取考虑合并后的单元格边界（跨多列/行时返回合并后的总宽高）。
+    /// </summary>
+    public static TableCellBounds GetMergedCellBounds(TableElement table, int rowIndex, int columnIndex)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        var cellIndex = rowIndex * table.Cols + columnIndex;
+        if (cellIndex < 0 || cellIndex >= table.Cells.Count)
+        {
+            return new TableCellBounds(0, 0, 0, 0);
+        }
+
+        var cell = table.Cells[cellIndex];
+        var baseBounds = GetCellBounds(table, rowIndex, columnIndex);
+
+        if (cell.ColSpan <= 1 && cell.RowSpan <= 1)
+        {
+            return baseBounds;
+        }
+
+        var totalWidth = 0;
+        for (var col = columnIndex; col < columnIndex + cell.ColSpan && col < table.Cols; col++)
+        {
+            totalWidth += table.GetColumnWidth(col);
+        }
+
+        var totalHeight = 0;
+        for (var row = rowIndex; row < rowIndex + cell.RowSpan && row < table.Rows; row++)
+        {
+            totalHeight += table.GetRowHeight(row);
+        }
+
+        return new TableCellBounds(baseBounds.X, baseBounds.Y, totalWidth, totalHeight);
+    }
+
+    /// <summary>
     /// 计算指定内部元素在表格坐标系中的边界。
     /// </summary>
     public static TableCellBounds GetInnerElementBounds(TableElement table, int rowIndex, int columnIndex, TableCellInnerElement innerElement)
