@@ -296,7 +296,7 @@ public sealed class TableCell
 
     public void MigrateLegacyContentToInnerElements()
     {
-        if (!HasLegacyContent)
+        if (!HasLegacyContent || string.IsNullOrWhiteSpace(Content))
         {
             return;
         }
@@ -569,4 +569,4 @@ public enum TableCellResizeMode
 /// <summary>
 /// 表示表格行高或列宽调整请求。
 /// </summary>
-public sealed record TableCellResizeRequest(string TableElementId, TableCellResizeMode Mode, int Index, int NewSize, IReadOnlyList<int>? RowHeights = null);
+public sealed record TableCellResizeRequest(string TableElementId, TableCellResizeMode Mode, int Index, int NewSize, IReadOnlyList<int>? RowHeights = null, IReadOnlyList<int>? ColumnWidths = null);

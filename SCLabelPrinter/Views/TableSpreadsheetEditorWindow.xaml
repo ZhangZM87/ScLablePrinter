@@ -1,0 +1,165 @@
+<Window
+    x:Class="SCLabelPrinter.Views.TableSpreadsheetEditorWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="clr-namespace:SCLabelPrinter.Core.Models;assembly=SCLabelPrinter.Core"
+    Title="表格电子表格编辑器"
+    Width="980"
+    Height="640"
+    Background="#FFF6F7F9"
+    WindowStartupLocation="CenterOwner"
+    mc:Ignorable="d">
+    <Border
+        Padding="18"
+        Background="White"
+        BorderBrush="#FFCACDD4"
+        BorderThickness="1"
+        CornerRadius="12">
+        <DockPanel LastChildFill="True">
+            <StackPanel DockPanel.Dock="Top">
+                <TextBlock
+                    FontSize="18"
+                    FontWeight="Bold"
+                    Foreground="#FF22272E"
+                    Text="表格电子表格编辑器" />
+                <TextBlock
+                    Margin="0,6,0,0"
+                    Foreground="#FF5B6678"
+                    Text="像电子表格一样直接编辑单元格内容，并保留复杂内部元素的独立编辑入口。" />
+            </StackPanel>
+
+            <StackPanel
+                DockPanel.Dock="Bottom"
+                Margin="0,16,0,0"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right">
+                <Button
+                    Width="96"
+                    Margin="0,0,10,0"
+                    Click="CancelButton_Click"
+                    Content="取消" />
+                <Button
+                    Width="96"
+                    Click="OkButton_Click"
+                    Content="确定" />
+            </StackPanel>
+
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="310" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <WrapPanel Grid.Column="0" Margin="0,0,0,12">
+                    <Button Margin="0,0,8,8" Padding="10,6" Command="{Binding AddRowAboveCommand}" Content="上方插行" />
+                    <Button Margin="0,0,8,8" Padding="10,6" Command="{Binding AddRowBelowCommand}" Content="下方插行" />
+                    <Button Margin="0,0,8,8" Padding="10,6" Command="{Binding RemoveSelectedRowCommand}" Content="删除当前行" />
+                    <Button Margin="0,0,8,8" Padding="10,6" Command="{Binding AddColumnLeftCommand}" Content="左侧插列" />
+                    <Button Margin="0,0,8,8" Padding="10,6" Command="{Binding AddColumnRightCommand}" Content="右侧插列" />
+                    <Button Margin="0,0,8,8" Padding="10,6" Command="{Binding RemoveSelectedColumnCommand}" Content="删除当前列" />
+                </WrapPanel>
+
+                <Border
+                    Grid.Row="1"
+                    Grid.Column="0"
+                    Padding="10"
+                    Background="#FFF7F8FB"
+                    BorderBrush="#FFE2E5EB"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                    <DataGrid
+                        x:Name="SpreadsheetGrid"
+                        AutoGenerateColumns="True"
+                        CanUserAddRows="False"
+                        CanUserDeleteRows="False"
+                        CanUserResizeRows="True"
+                        GridLinesVisibility="All"
+                        HeadersVisibility="All"
+                        ItemsSource="{Binding SpreadsheetView}"
+                        SelectionMode="Extended"
+                        SelectionUnit="Cell"
+                        BeginningEdit="SpreadsheetGrid_BeginningEdit"
+                        CellEditEnding="SpreadsheetGrid_CellEditEnding"
+                        LoadingRow="SpreadsheetGrid_LoadingRow"
+                        SelectedCellsChanged="SpreadsheetGrid_SelectedCellsChanged" />
+                </Border>
+
+                <Border
+                    Grid.RowSpan="2"
+                    Grid.Column="2"
+                    Padding="14"
+                    Background="#FFF7F8FB"
+                    BorderBrush="#FFE2E5EB"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold" Foreground="#FF22272E" Text="结构概览" />
+                            <TextBlock Margin="0,6,0,0" Foreground="#FF5B6678" Text="{Binding StructureSummary}" />
+
+                            <Separator Margin="0,14,0,14" />
+
+                            <TextBlock FontWeight="SemiBold" Foreground="#FF22272E" Text="当前单元格" />
+                            <TextBlock Margin="0,6,0,0" Foreground="#FF1D4E8E" Text="{Binding SelectedCellAddress}" />
+                            <TextBlock Margin="0,6,0,0" Foreground="#FF5B6678" TextWrapping="Wrap" Text="{Binding SelectedCellHint}" />
+
+                            <TextBlock Margin="0,14,0,0" Text="内容类型" />
+                            <ComboBox
+                                Margin="0,6,0,0"
+                                IsEnabled="{Binding SelectedCellEditable}"
+                                SelectedValue="{Binding SelectedCellContentType, Mode=TwoWay}"
+                                SelectedValuePath="Tag">
+                                <ComboBoxItem Content="文本" Tag="{x:Static models:TableCellContentType.Text}" />
+                                <ComboBoxItem Content="条码" Tag="{x:Static models:TableCellContentType.Barcode}" />
+                                <ComboBoxItem Content="二维码" Tag="{x:Static models:TableCellContentType.QrCode}" />
+                            </ComboBox>
+
+                            <TextBlock Margin="0,14,0,0" Text="内容" />
+                            <TextBox
+                                Margin="0,6,0,0"
+                                AcceptsReturn="True"
+                                Height="110"
+                                IsEnabled="{Binding SelectedCellEditable}"
+                                Text="{Binding SelectedCellContent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                TextWrapping="Wrap"
+                                VerticalScrollBarVisibility="Auto" />
+
+                            <WrapPanel Margin="0,14,0,0">
+                                <Button
+                                    Margin="0,0,8,8"
+                                    Padding="10,6"
+                                    Command="{Binding ApplySelectedCellChangesCommand}"
+                                    Content="应用当前格" />
+                                <Button
+                                    Margin="0,0,8,8"
+                                    Padding="10,6"
+                                    Command="{Binding EditSelectedCellInnerElementsCommand}"
+                                    Content="编辑内部元素" />
+                            </WrapPanel>
+
+                            <Border
+                                Margin="0,10,0,0"
+                                Padding="10"
+                                Background="White"
+                                BorderBrush="#FFE2E5EB"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                                <TextBlock
+                                    Foreground="#FF5B6678"
+                                    Text="含内部元素的单元格会锁定直接键入，避免覆盖复杂布局。需要精细编辑时，使用“编辑内部元素”。"
+                                    TextWrapping="Wrap" />
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </DockPanel>
+    </Border>
+</Window>

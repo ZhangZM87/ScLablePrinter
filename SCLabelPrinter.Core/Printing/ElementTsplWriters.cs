@@ -117,7 +117,7 @@ public sealed class TableElementTsplWriter : IElementTsplWriter
         var table = (TableElement)element;
         var commands = new List<string>();
         var totalWidth = table.ColumnWidths.Sum();
-        var totalHeight = table.Rows * table.RowHeight;
+        var totalHeight = table.TotalHeight;
         commands.Add($"BOX {table.X},{table.Y},{table.X + totalWidth},{table.Y + totalHeight},1");
 
         var currentX = table.X;
@@ -129,7 +129,7 @@ public sealed class TableElementTsplWriter : IElementTsplWriter
 
         for (var row = 1; row < table.Rows; row++)
         {
-            var y = table.Y + row * table.RowHeight;
+            var y = table.Y + table.GetRowHeights().Take(row).Sum();
             commands.Add($"BAR {table.X},{y},{totalWidth},1");
         }
 

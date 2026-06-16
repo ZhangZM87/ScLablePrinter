@@ -11,3 +11,5 @@
 /SCLabelPrinter.Tests/bin/Debug/net8.0
 /SCLabelPrinter.Tests/obj
 /SCLabelPrinter/obj
+/artifacts/validation/Debug
+/.learnings

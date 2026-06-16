@@ -18,27 +18,43 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="工具箱" />
-                    <WrapPanel>
-                        <Button Command="{Binding AddTextElementCommand}" Content="文本" />
-                        <Button Command="{Binding AddBarcodeElementCommand}" Content="条码" />
-                        <Button Command="{Binding AddQrCodeElementCommand}" Content="二维码" />
-                        <Button
-                            Command="{Binding AddBoxElementCommand}"
-                            Content="矩形框"
-                            Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button
-                            Command="{Binding AddLineElementCommand}"
-                            Content="线条"
-                            Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button
-                            Command="{Binding AddEraseElementCommand}"
-                            Content="挖空"
-                            Style="{StaticResource SecondaryButtonStyle}" />
-                        <Button
-                            Command="{Binding AddTableElementCommand}"
-                            Content="表格"
-                            Style="{StaticResource SecondaryButtonStyle}" />
-                    </WrapPanel>
+                    <TextBlock
+                        Margin="0,6,0,0"
+                        Foreground="{StaticResource MutedTextBrush}"
+                        Text="按用途分组的插入工具，后续新增元素类型时无需继续扩展固定按钮区。"
+                        TextWrapping="Wrap" />
+                    <ItemsControl ItemsSource="{Binding ToolboxSections}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,14,0,0">
+                                    <TextBlock
+                                        FontWeight="SemiBold"
+                                        Foreground="{StaticResource MutedTextBrush}"
+                                        Text="{Binding Title}" />
+                                    <ItemsControl ItemsSource="{Binding Items}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button
+                                                    Margin="0,8,0,0"
+                                                    Padding="10,8"
+                                                    Command="{Binding Command}"
+                                                    HorizontalContentAlignment="Left"
+                                                    Style="{StaticResource SecondaryButtonStyle}">
+                                                    <StackPanel>
+                                                        <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                                                        <TextBlock
+                                                            Foreground="{StaticResource MutedTextBrush}"
+                                                            Text="{Binding Description}"
+                                                            TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
                     <TextBlock
                         Margin="0,16,0,0"
@@ -293,55 +309,20 @@
                                     <TextBox Text="{Binding DataContext.SelectedTableColumnWidthA, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="列宽 B" />
                                     <TextBox Text="{Binding DataContext.SelectedTableColumnWidthB, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
-
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="整体宽度" />
+                                    <TextBox Text="{Binding DataContext.SelectedTableTotalWidth, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="整体高度" />
+                                    <TextBox Text="{Binding DataContext.SelectedTableTotalHeight, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Button
+                                        Margin="0,10,0,0"
+                                        Command="{Binding DataContext.OpenSelectedTableSpreadsheetEditorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        Content="打开电子表格编辑器"
+                                        Style="{StaticResource SecondaryButtonStyle}" />
                                     <TextBlock
                                         Margin="0,8,0,0"
-                                        Style="{StaticResource SectionTitleTextStyle}"
-                                        Text="单元格内容" />
-                                    <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
-                                        <StackPanel Width="160">
-                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="(1,1) 类型" />
-                                            <ComboBox SelectedValue="{Binding DataContext.SelectedTableCell11Type, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
-                                                <ComboBoxItem Content="文本" Tag="{x:Static models:TableCellContentType.Text}" />
-                                                <ComboBoxItem Content="条码" Tag="{x:Static models:TableCellContentType.Barcode}" />
-                                                <ComboBoxItem Content="二维码" Tag="{x:Static models:TableCellContentType.QrCode}" />
-                                            </ComboBox>
-                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="内容" />
-                                            <TextBox Text="{Binding DataContext.SelectedTableCell11Content, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                        <StackPanel Width="160" Margin="12,0,0,0">
-                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="(1,2) 类型" />
-                                            <ComboBox SelectedValue="{Binding DataContext.SelectedTableCell12Type, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
-                                                <ComboBoxItem Content="文本" Tag="{x:Static models:TableCellContentType.Text}" />
-                                                <ComboBoxItem Content="条码" Tag="{x:Static models:TableCellContentType.Barcode}" />
-                                                <ComboBoxItem Content="二维码" Tag="{x:Static models:TableCellContentType.QrCode}" />
-                                            </ComboBox>
-                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="内容" />
-                                            <TextBox Text="{Binding DataContext.SelectedTableCell12Content, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                                        <StackPanel Width="160">
-                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="(2,1) 类型" />
-                                            <ComboBox SelectedValue="{Binding DataContext.SelectedTableCell21Type, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
-                                                <ComboBoxItem Content="文本" Tag="{x:Static models:TableCellContentType.Text}" />
-                                                <ComboBoxItem Content="条码" Tag="{x:Static models:TableCellContentType.Barcode}" />
-                                                <ComboBoxItem Content="二维码" Tag="{x:Static models:TableCellContentType.QrCode}" />
-                                            </ComboBox>
-                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="内容" />
-                                            <TextBox Text="{Binding DataContext.SelectedTableCell21Content, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                        <StackPanel Width="160" Margin="12,0,0,0">
-                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="(2,2) 类型" />
-                                            <ComboBox SelectedValue="{Binding DataContext.SelectedTableCell22Type, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
-                                                <ComboBoxItem Content="文本" Tag="{x:Static models:TableCellContentType.Text}" />
-                                                <ComboBoxItem Content="条码" Tag="{x:Static models:TableCellContentType.Barcode}" />
-                                                <ComboBoxItem Content="二维码" Tag="{x:Static models:TableCellContentType.QrCode}" />
-                                            </ComboBox>
-                                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="内容" />
-                                            <TextBox Text="{Binding DataContext.SelectedTableCell22Content, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                    </StackPanel>
+                                        Foreground="{StaticResource MutedTextBrush}"
+                                        Text="复杂表格请在电子表格编辑器中直接编辑单元格与行列结构。"
+                                        TextWrapping="Wrap" />
                                 </StackPanel>
                             </DataTemplate>
                         </ContentControl.Resources>

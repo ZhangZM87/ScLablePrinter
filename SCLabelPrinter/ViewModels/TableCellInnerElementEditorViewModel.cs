@@ -11,6 +11,9 @@ namespace SCLabelPrinter.ViewModels;
 /// </summary>
 public sealed partial class TableCellInnerElementEditorViewModel : ObservableObject
 {
+    private const int TextContentPadding = 2;
+    private static readonly ITableCellTextPreviewMetricsService TextPreviewMetricsService = new TableCellTextPreviewMetricsService();
+
     public TableCellInnerElementEditorViewModel(TableCell cell)
     {
         InnerElements = new ObservableCollection<TableCellInnerElement>(cell.InnerElements.Select(CloneInnerElement));
@@ -21,6 +24,8 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
     private ObservableCollection<TableCellInnerElement> innerElements = new();
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RemoveSelectedInnerElementCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplySelectedInnerElementChangesCommand))]
     private TableCellInnerElement? selectedInnerElement;
 
     [ObservableProperty]
@@ -37,6 +42,18 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
 
     [ObservableProperty]
     private int selectedHeight = 40;
+
+    [ObservableProperty]
+    private int selectedRotation;
+
+    [ObservableProperty]
+    private string selectedTextFont = "3";
+
+    [ObservableProperty]
+    private int selectedTextXScale = 1;
+
+    [ObservableProperty]
+    private int selectedTextYScale = 1;
 
     [ObservableProperty]
     private BarcodeType selectedBarcodeType = BarcodeType.Code128;
@@ -59,11 +76,55 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
     [ObservableProperty]
     private string selectedQrMode = "A";
 
+    [ObservableProperty]
+    private string selectedElementTypeName = "未选择元素";
+
+    public bool HasSelectedInnerElement => SelectedInnerElement is not null;
+
+    public bool IsTextInnerElementSelected => SelectedInnerElement is TableCellTextElement;
+
+    public bool IsBarcodeInnerElementSelected => SelectedInnerElement is TableCellBarcodeElement;
+
+    public bool IsQrInnerElementSelected => SelectedInnerElement is TableCellQrCodeElement;
+
     partial void OnSelectedInnerElementChanged(TableCellInnerElement? value)
     {
         RefreshSelectedInnerProperties(value);
+        OnPropertyChanged(nameof(HasSelectedInnerElement));
+        OnPropertyChanged(nameof(IsTextInnerElementSelected));
+        OnPropertyChanged(nameof(IsBarcodeInnerElementSelected));
+        OnPropertyChanged(nameof(IsQrInnerElementSelected));
     }
 
+    /// <summary>
+    /// 当文本纵向缩放发生变化时，自动同步最小建议高度，避免再次落入不可见尺寸。
+    /// </summary>
+    partial void OnSelectedTextYScaleChanged(int value)
+    {
+        if (!IsTextInnerElementSelected)
+        {
+            return;
+        }
+
+        SelectedHeight = Math.Max(SelectedHeight, TextPreviewMetricsService.GetMinimumFrameHeight(SelectedTextFont, value, TextContentPadding));
+    }
+
+    /// <summary>
+    /// 当文本字体变化时，自动同步最小建议高度，避免字体变大后再次不可见。
+    /// </summary>
+    partial void OnSelectedTextFontChanged(string value)
+    {
+        if (!IsTextInnerElementSelected)
+        {
+            return;
+        }
+
+        SelectedHeight = Math.Max(SelectedHeight, TextPreviewMetricsService.GetMinimumFrameHeight(value, SelectedTextYScale, TextContentPadding));
+    }
+
+    /// <summary>
+    /// 根据当前选中内部元素刷新右侧编辑面板字段和类型状态。
+    /// </summary>
     private void RefreshSelectedInnerProperties(TableCellInnerElement? inner)
     {
         if (inner is null)
@@ -73,6 +134,10 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
             SelectedY = 0;
             SelectedWidth = 120;
             SelectedHeight = 40;
+            SelectedRotation = 0;
+            SelectedTextFont = "3";
+            SelectedTextXScale = 1;
+            SelectedTextYScale = 1;
             SelectedBarcodeType = BarcodeType.Code128;
             SelectedBarcodeReadable = true;
             SelectedBarcodeNarrow = 2;
@@ -80,6 +145,7 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
             SelectedQrErrorCorrectionLevel = "L";
             SelectedQrCellWidth = 5;
             SelectedQrMode = "A";
+            SelectedElementTypeName = "未选择元素";
             return;
         }
 
@@ -87,11 +153,16 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
         SelectedY = inner.Y;
         SelectedWidth = inner.Width;
         SelectedHeight = inner.Height;
+        SelectedRotation = inner.Rotation;
 
         switch (inner)
         {
             case TableCellTextElement textElement:
                 SelectedContent = textElement.Content;
+                SelectedTextFont = textElement.Font;
+                SelectedTextXScale = textElement.XScale;
+                SelectedTextYScale = textElement.YScale;
+                SelectedElementTypeName = "文本元素";
                 break;
             case TableCellBarcodeElement barcodeElement:
                 SelectedContent = barcodeElement.Content;
@@ -99,15 +170,18 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
                 SelectedBarcodeReadable = barcodeElement.Readable;
                 SelectedBarcodeNarrow = barcodeElement.Narrow;
                 SelectedBarcodeWide = barcodeElement.Wide;
+                SelectedElementTypeName = "条码元素";
                 break;
             case TableCellQrCodeElement qrCodeElement:
                 SelectedContent = qrCodeElement.Content;
                 SelectedQrErrorCorrectionLevel = qrCodeElement.ErrorCorrectionLevel;
                 SelectedQrCellWidth = qrCodeElement.CellWidth;
                 SelectedQrMode = qrCodeElement.Mode;
+                SelectedElementTypeName = "二维码元素";
                 break;
             default:
                 SelectedContent = string.Empty;
+                SelectedElementTypeName = "未知元素";
                 break;
         }
     }
@@ -121,7 +195,7 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
             X = 8,
             Y = 8,
             Width = 120,
-            Height = 40,
+            Height = TextPreviewMetricsService.GetMinimumFrameHeight("3", 1, TextContentPadding),
         };
         InnerElements.Add(inner);
         SelectedInnerElement = inner;
@@ -187,11 +261,17 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
         SelectedInnerElement.Y = SelectedY;
         SelectedInnerElement.Width = SelectedWidth;
         SelectedInnerElement.Height = SelectedHeight;
+        SelectedInnerElement.Rotation = SelectedRotation;
 
         switch (SelectedInnerElement)
         {
             case TableCellTextElement textElement:
                 textElement.Content = SelectedContent;
+                textElement.Font = SelectedTextFont;
+                textElement.XScale = Math.Max(1, SelectedTextXScale);
+                textElement.YScale = Math.Max(1, SelectedTextYScale);
+                textElement.Height = Math.Max(textElement.Height, TextPreviewMetricsService.GetMinimumFrameHeight(textElement.Font, textElement.YScale, TextContentPadding));
+                SelectedHeight = textElement.Height;
                 break;
             case TableCellBarcodeElement barcodeElement:
                 barcodeElement.Content = SelectedContent;
@@ -208,7 +288,7 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
                 break;
         }
 
-        SelectedInnerElement = SelectedInnerElement;
+            RefreshSelectedInnerProperties(SelectedInnerElement);
     }
 
     public TableCell BuildTableCell()

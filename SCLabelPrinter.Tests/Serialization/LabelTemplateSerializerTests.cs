@@ -63,4 +63,64 @@ public sealed class LabelTemplateSerializerTests
         Assert.AreEqual("N2A5140A0", ((BarcodeElement)roundtrip.Elements[1]).Content);
         Assert.AreEqual(120, ((EraseElement)roundtrip.Elements[2]).Width);
     }
+
+    /// <summary>
+    /// 验证表格单元格内部文本元素在模板快照的序列化往返后仍然存在，避免预览阶段退化成空单元格。
+    /// </summary>
+    [TestMethod]
+    public void SerializeAndDeserialize_ShouldPreserveTableCellInnerTextElements()
+    {
+        var serializer = new LabelTemplateSerializer();
+        var table = new TableElement
+        {
+            Rows = 1,
+            Cols = 1,
+            RowHeights = [60],
+            ColumnWidths = [120],
+            Cells =
+            [
+                new TableCell
+                {
+                    ContentType = TableCellContentType.Text,
+                    Content = string.Empty,
+                    InnerElements =
+                    [
+                        new TableCellTextElement
+                        {
+                            X = 6,
+                            Y = 6,
+                            Width = 48,
+                            Height = 28,
+                            Content = "文本",
+                            Font = "3",
+                        },
+                    ],
+                },
+            ],
+        };
+        var template = new LabelTemplateDocument
+        {
+            Version = "1.0",
+            Label = new LabelDefinition
+            {
+                Width = 60,
+                Height = 40,
+                Gap = 2,
+                Density = 8,
+                Unit = LabelUnit.Millimeter,
+            },
+            Elements = [table],
+        };
+
+        var json = serializer.Serialize(template);
+        var roundtrip = serializer.Deserialize(json);
+
+        Assert.AreEqual(1, roundtrip.Elements.Count);
+        Assert.IsInstanceOfType<TableElement>(roundtrip.Elements[0]);
+        var roundtripTable = (TableElement)roundtrip.Elements[0];
+        Assert.AreEqual(1, roundtripTable.Cells.Count);
+        Assert.AreEqual(1, roundtripTable.Cells[0].InnerElements.Count);
+        Assert.IsInstanceOfType<TableCellTextElement>(roundtripTable.Cells[0].InnerElements[0]);
+        Assert.AreEqual("文本", ((TableCellTextElement)roundtripTable.Cells[0].InnerElements[0]).Content);
+    }
 }

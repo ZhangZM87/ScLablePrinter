@@ -40,6 +40,8 @@ public partial class EditorViewModel : ObservableObject
 
     public IRelayCommand<TableCellResizeRequest?> TableCellResizeCommand => _tableCellResizeCommand ??= new RelayCommand<TableCellResizeRequest?>(HandleTableCellResize);
 
+    public IReadOnlyList<ToolboxSectionViewModel> ToolboxSections { get; }
+
     /// <summary>
     /// 创建标签编辑器视图模型。
     /// </summary>
@@ -52,6 +54,7 @@ public partial class EditorViewModel : ObservableObject
         _statusCenter = statusCenter;
         _tsplGenerator = tsplGenerator;
         _serializer = serializer;
+        ToolboxSections = BuildToolboxSections();
 
         ResetDocument(false);
     }
@@ -79,7 +82,7 @@ public partial class EditorViewModel : ObservableObject
     private double labelGap = 2;
 
     [ObservableProperty]
-    private double previewZoom = 2.0;
+    private double previewZoom = 1.0;
 
     [ObservableProperty]
     private int density = 8;
@@ -87,6 +90,7 @@ public partial class EditorViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RemoveSelectedElementCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplySelectedElementChangesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(OpenSelectedTableSpreadsheetEditorCommand))]
     private LabelElement? selectedElement;
 
     [ObservableProperty]
@@ -150,28 +154,10 @@ public partial class EditorViewModel : ObservableObject
     private int selectedTableColumnWidthB = 260;
 
     [ObservableProperty]
-    private TableCellContentType selectedTableCell11Type = TableCellContentType.Text;
+    private int selectedTableTotalWidth = 520;
 
     [ObservableProperty]
-    private string selectedTableCell11Content = string.Empty;
-
-    [ObservableProperty]
-    private TableCellContentType selectedTableCell12Type = TableCellContentType.Text;
-
-    [ObservableProperty]
-    private string selectedTableCell12Content = string.Empty;
-
-    [ObservableProperty]
-    private TableCellContentType selectedTableCell21Type = TableCellContentType.Text;
-
-    [ObservableProperty]
-    private string selectedTableCell21Content = string.Empty;
-
-    [ObservableProperty]
-    private TableCellContentType selectedTableCell22Type = TableCellContentType.Text;
-
-    [ObservableProperty]
-    private string selectedTableCell22Content = string.Empty;
+    private int selectedTableTotalHeight = 200;
 
     [ObservableProperty]
     private int selectedBoxEndY = 120;
@@ -205,6 +191,8 @@ public partial class EditorViewModel : ObservableObject
     public bool IsLineElementSelected => SelectedElement is LineElement;
 
     public bool IsEraseElementSelected => SelectedElement is EraseElement;
+
+    public bool IsTableElementSelected => SelectedElement is TableElement;
 
     /// <summary>
     /// 处理标签尺寸或打印浓度更新后的预览刷新。
@@ -251,6 +239,7 @@ public partial class EditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsBoxElementSelected));
         OnPropertyChanged(nameof(IsLineElementSelected));
         OnPropertyChanged(nameof(IsEraseElementSelected));
+        OnPropertyChanged(nameof(IsTableElementSelected));
     }
 
     partial void OnSelectedElementIdChanged(string? value)
@@ -293,7 +282,7 @@ public partial class EditorViewModel : ObservableObject
     [RelayCommand]
     private void ResetZoom()
     {
-        PreviewZoom = 2.0;
+        PreviewZoom = 1.0;
     }
 
     /// <summary>
@@ -515,6 +504,37 @@ public partial class EditorViewModel : ObservableObject
         }, "已添加表格元素");
     }
 
+    /// <summary>
+    /// 打开当前选中表格的电子表格编辑器，以更高效地进行行列和单元格编辑。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanEditSelectedTable))]
+    private void OpenSelectedTableSpreadsheetEditor()
+    {
+        if (SelectedElement is not TableElement tableElement)
+        {
+            return;
+        }
+
+        var editor = new TableSpreadsheetEditorViewModel(tableElement);
+        var dialog = new TableSpreadsheetEditorWindow
+        {
+            DataContext = editor,
+            Owner = Application.Current?.MainWindow,
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        CaptureUndoSnapshot();
+        CopyTableState(tableElement, editor.BuildTable());
+        RefreshPreview();
+        LoadSelectedElementEditor(tableElement);
+        EditorHint = "表格电子表格编辑已应用";
+        _statusCenter.SetActivityMessage("表格电子表格编辑已更新");
+    }
+
     [RelayCommand]
     private async Task HandleTableCellContextMenuAsync(TableCellContextMenuRequest? request)
     {
@@ -555,13 +575,22 @@ public partial class EditorViewModel : ObservableObject
                 tableElement.RemoveColumnAt(request.Column);
                 break;
             case TableCellContextMenuAction.AddCellTextElement:
-                AddCellInnerElement(tableElement, request.Row, request.Column, new TableCellTextElement { Content = "文本", Width = 120, Height = 40 });
+                AddElementAtTableCell(tableElement, request.Row, request.Column, new TextElement
+                {
+                    Content = "新文本",
+                }, "已添加单元格位置文本元素");
                 break;
             case TableCellContextMenuAction.AddCellBarcodeElement:
-                AddCellInnerElement(tableElement, request.Row, request.Column, new TableCellBarcodeElement { Content = "12345678", Width = 140, Height = 40 });
+                AddElementAtTableCell(tableElement, request.Row, request.Column, new BarcodeElement
+                {
+                    Content = "1234567890",
+                }, "已添加单元格位置条码元素");
                 break;
             case TableCellContextMenuAction.AddCellQrCodeElement:
-                AddCellInnerElement(tableElement, request.Row, request.Column, new TableCellQrCodeElement { Content = "https://example.com", Width = 80, Height = 80 });
+                AddElementAtTableCell(tableElement, request.Row, request.Column, new QrCodeElement
+                {
+                    Content = "https://example.com",
+                }, "已添加单元格位置二维码元素");
                 break;
             case TableCellContextMenuAction.EditCellInnerElement:
                 await EditTableCellInnerElementAsync(tableElement, request.Row, request.Column);
@@ -569,9 +598,6 @@ public partial class EditorViewModel : ObservableObject
             case TableCellContextMenuAction.RemoveCellInnerElement:
                 RemoveCellInnerElement(tableElement, request.Row, request.Column);
                 break;
-            case TableCellContextMenuAction.EditCell:
-                await EditTableCellAsync(tableElement, request.Row, request.Column);
-                return;
             default:
                 return;
         }
@@ -579,33 +605,6 @@ public partial class EditorViewModel : ObservableObject
         tableElement.EnsureCellCount();
         RefreshPreview();
         _statusCenter.SetActivityMessage("表格已更新");
-    }
-
-    private async Task EditTableCellAsync(TableElement tableElement, int row, int column)
-    {
-        if (row < 0 || row >= tableElement.Rows || column < 0 || column >= tableElement.Cols)
-        {
-            return;
-        }
-
-        tableElement.EnsureCellCount();
-        var cellIndex = row * tableElement.Cols + column;
-        var cell = tableElement.Cells[cellIndex];
-
-        var editor = new TableCellEditorViewModel(cell);
-        var dialog = new TableCellEditorWindow
-        {
-            DataContext = editor,
-            Owner = Application.Current?.MainWindow,
-        };
-
-        if (dialog.ShowDialog() == true)
-        {
-            CaptureUndoSnapshot();
-            tableElement.Cells[cellIndex] = editor.BuildTableCell();
-            RefreshPreview();
-            _statusCenter.SetActivityMessage($"单元格 ({row + 1},{column + 1}) 已更新");
-        }
     }
 
     private void AddCellInnerElement(TableElement tableElement, int row, int column, TableCellInnerElement innerElement)
@@ -621,6 +620,8 @@ public partial class EditorViewModel : ObservableObject
         var cell = tableElement.Cells[cellIndex];
         cell.MigrateLegacyContentToInnerElements();
         cell.InnerElements.Add(innerElement);
+        cell.Content = string.Empty;
+        cell.ContentType = TableCellContentType.Text;
         RefreshPreview();
         _statusCenter.SetActivityMessage("已向单元格添加内部元素");
     }
@@ -637,7 +638,6 @@ public partial class EditorViewModel : ObservableObject
         var cell = tableElement.Cells[cellIndex];
         if (cell.InnerElements.Count == 0)
         {
-            await EditTableCellAsync(tableElement, row, column);
             return;
         }
 
@@ -705,12 +705,14 @@ public partial class EditorViewModel : ObservableObject
             return;
         }
 
+        CaptureUndoSnapshot();
         innerElement.X = request.X;
         innerElement.Y = request.Y;
         innerElement.Width = request.Width;
         innerElement.Height = request.Height;
 
         RefreshPreview();
+        _statusCenter.SetActivityMessage("单元格内部元素位置已更新");
     }
 
     private void HandleTableCellResize(TableCellResizeRequest? request)
@@ -726,10 +728,16 @@ public partial class EditorViewModel : ObservableObject
             return;
         }
 
+        CaptureUndoSnapshot();
         switch (request.Mode)
         {
             case TableCellResizeMode.Column:
-                if (request.Index >= 0 && request.Index < tableElement.ColumnWidths.Count)
+                if (request.ColumnWidths is not null && request.ColumnWidths.Count == tableElement.Cols)
+                {
+                    tableElement.ColumnWidths.Clear();
+                    tableElement.ColumnWidths.AddRange(request.ColumnWidths);
+                }
+                else if (request.Index >= 0 && request.Index < tableElement.ColumnWidths.Count)
                 {
                     tableElement.ColumnWidths[request.Index] = request.NewSize;
                 }
@@ -756,9 +764,12 @@ public partial class EditorViewModel : ObservableObject
             SelectedTableRowHeight = tableElement.RowHeight;
             SelectedTableColumnWidthA = tableElement.ColumnWidths.ElementAtOrDefault(0);
             SelectedTableColumnWidthB = tableElement.ColumnWidths.ElementAtOrDefault(1);
+            SelectedTableTotalWidth = tableElement.TotalWidth;
+            SelectedTableTotalHeight = tableElement.TotalHeight;
         }
 
         RefreshPreview();
+        _statusCenter.SetActivityMessage(request.Mode == TableCellResizeMode.Row ? "表格行高已更新" : "表格列宽已更新");
     }
 
     /// <summary>
@@ -848,13 +859,24 @@ public partial class EditorViewModel : ObservableObject
                         tableElement.ColumnWidths.Add(SelectedTableColumnWidthB);
                     }
                 }
-                tableElement.Cells = new List<TableCell>
+
+                if (SelectedTableTotalWidth > 0 && tableElement.TotalWidth > 0)
                 {
-                    new TableCell { ContentType = SelectedTableCell11Type, Content = SelectedTableCell11Content, BarcodeType = BarcodeType.Code128, QrCellWidth = SelectedQrCellWidth, QrErrorCorrectionLevel = SelectedQrErrorCorrectionLevel, QrMode = SelectedQrMode },
-                    new TableCell { ContentType = SelectedTableCell12Type, Content = SelectedTableCell12Content, BarcodeType = BarcodeType.Code128, QrCellWidth = SelectedQrCellWidth, QrErrorCorrectionLevel = SelectedQrErrorCorrectionLevel, QrMode = SelectedQrMode },
-                    new TableCell { ContentType = SelectedTableCell21Type, Content = SelectedTableCell21Content, BarcodeType = BarcodeType.Code128, QrCellWidth = SelectedQrCellWidth, QrErrorCorrectionLevel = SelectedQrErrorCorrectionLevel, QrMode = SelectedQrMode },
-                    new TableCell { ContentType = SelectedTableCell22Type, Content = SelectedTableCell22Content, BarcodeType = BarcodeType.Code128, QrCellWidth = SelectedQrCellWidth, QrErrorCorrectionLevel = SelectedQrErrorCorrectionLevel, QrMode = SelectedQrMode },
-                };
+                    var widthScale = (double)SelectedTableTotalWidth / tableElement.TotalWidth;
+                    for (var i = 0; i < tableElement.ColumnWidths.Count; i++)
+                    {
+                        tableElement.ColumnWidths[i] = Math.Max(20, (int)Math.Round(tableElement.ColumnWidths[i] * widthScale));
+                    }
+                }
+
+                if (SelectedTableTotalHeight > 0 && tableElement.TotalHeight > 0)
+                {
+                    var heightScale = (double)SelectedTableTotalHeight / tableElement.TotalHeight;
+                    for (var i = 0; i < tableElement.RowHeights.Count; i++)
+                    {
+                        tableElement.RowHeights[i] = Math.Max(20, (int)Math.Round(tableElement.RowHeights[i] * heightScale));
+                    }
+                }
                 break;
         }
 
@@ -986,6 +1008,40 @@ public partial class EditorViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 判断当前是否存在可打开电子表格编辑器的表格元素。
+    /// </summary>
+    private bool CanEditSelectedTable()
+    {
+        return SelectedElement is TableElement;
+    }
+
+    /// <summary>
+    /// 构建工具箱分组定义，使新增元素入口以数据驱动方式呈现，降低后续扩展成本。
+    /// </summary>
+    private IReadOnlyList<ToolboxSectionViewModel> BuildToolboxSections()
+    {
+        return new[]
+        {
+            new ToolboxSectionViewModel("内容元素", new[]
+            {
+                new ToolboxItemViewModel("文本", "快速放置可编辑文字内容。", AddTextElementCommand),
+                new ToolboxItemViewModel("条码", "插入一维条码并保留打印参数。", AddBarcodeElementCommand),
+                new ToolboxItemViewModel("二维码", "插入二维码并支持后续参数调整。", AddQrCodeElementCommand),
+            }),
+            new ToolboxSectionViewModel("图形元素", new[]
+            {
+                new ToolboxItemViewModel("矩形框", "创建表单框线和外边界。", AddBoxElementCommand),
+                new ToolboxItemViewModel("线条", "创建分隔线和细条图形。", AddLineElementCommand),
+                new ToolboxItemViewModel("挖空", "为热敏标签预览添加留白区域。", AddEraseElementCommand),
+            }),
+            new ToolboxSectionViewModel("结构元素", new[]
+            {
+                new ToolboxItemViewModel("表格", "插入可进入电子表格编辑器的表格。", AddTableElementCommand),
+            }),
+        };
+    }
+
+    /// <summary>
     /// 重置为新的空白模板。
     /// </summary>
     private void ResetDocument(bool clearHistory)
@@ -995,7 +1051,7 @@ public partial class EditorViewModel : ObservableObject
         LabelHeight = 40;
         LabelGap = 2;
         Density = 8;
-        PreviewZoom = 2.0;
+        PreviewZoom = 1.0;
         Elements.Clear();
         SelectedElement = null;
         CurrentFilePath = null;
@@ -1023,6 +1079,28 @@ public partial class EditorViewModel : ObservableObject
         SelectedElement = element;
         RefreshPreview();
         _statusCenter.SetActivityMessage(message);
+    }
+
+    /// <summary>
+    /// 将新元素放置到指定表格单元格的位置上。
+    /// </summary>
+    private void AddElementAtTableCell(TableElement tableElement, int rowIndex, int columnIndex, LabelElement element, string message)
+    {
+        if (tableElement is null || element is null)
+        {
+            return;
+        }
+
+        if (rowIndex < 0 || rowIndex >= tableElement.Rows || columnIndex < 0 || columnIndex >= tableElement.Cols)
+        {
+            return;
+        }
+
+        tableElement.EnsureCellCount();
+        var cellBounds = TableCellLayoutCalculator.GetCellBounds(tableElement, rowIndex, columnIndex);
+        element.X = tableElement.X + cellBounds.X + 8;
+        element.Y = tableElement.Y + cellBounds.Y + 8;
+        AddElement(element, message);
     }
 
     /// <summary>
@@ -1176,19 +1254,95 @@ public partial class EditorViewModel : ObservableObject
                 SelectedTableRowHeight = tableElement.RowHeight;
                 SelectedTableColumnWidthA = tableElement.ColumnWidths.ElementAtOrDefault(0);
                 SelectedTableColumnWidthB = tableElement.ColumnWidths.ElementAtOrDefault(1);
-
-                SelectedTableCell11Type = tableElement.Cells.ElementAtOrDefault(0)?.ContentType ?? TableCellContentType.Text;
-                SelectedTableCell11Content = tableElement.Cells.ElementAtOrDefault(0)?.Content ?? string.Empty;
-                SelectedTableCell12Type = tableElement.Cells.ElementAtOrDefault(1)?.ContentType ?? TableCellContentType.Text;
-                SelectedTableCell12Content = tableElement.Cells.ElementAtOrDefault(1)?.Content ?? string.Empty;
-                SelectedTableCell21Type = tableElement.Cells.ElementAtOrDefault(2)?.ContentType ?? TableCellContentType.Text;
-                SelectedTableCell21Content = tableElement.Cells.ElementAtOrDefault(2)?.Content ?? string.Empty;
-                SelectedTableCell22Type = tableElement.Cells.ElementAtOrDefault(3)?.ContentType ?? TableCellContentType.Text;
-                SelectedTableCell22Content = tableElement.Cells.ElementAtOrDefault(3)?.Content ?? string.Empty;
+                SelectedTableTotalWidth = tableElement.TotalWidth;
+                SelectedTableTotalHeight = tableElement.TotalHeight;
                 break;
         }
 
         EditorHint = $"正在编辑 {element.GetType().Name}";
+    }
+
+    /// <summary>
+    /// 将电子表格编辑器中的工作副本回写到当前表格元素，保持元素实例和选中状态不变。
+    /// </summary>
+    private static void CopyTableState(TableElement target, TableElement source)
+    {
+        target.Rows = source.Rows;
+        target.Cols = source.Cols;
+        target.RowHeight = source.RowHeight;
+        target.RowHeights = source.RowHeights.ToList();
+        target.ColumnWidths = source.ColumnWidths.ToList();
+        target.Cells = source.Cells.Select(CloneTableCell).ToList();
+        target.BorderStyle = source.BorderStyle;
+        target.GridStyle = source.GridStyle;
+    }
+
+    /// <summary>
+    /// 复制表格单元格及内部元素，避免工作副本对象直接泄漏到主模板状态中。
+    /// </summary>
+    private static TableCell CloneTableCell(TableCell source)
+    {
+        return new TableCell
+        {
+            ContentType = source.ContentType,
+            Content = source.Content,
+            BarcodeType = source.BarcodeType,
+            QrCellWidth = source.QrCellWidth,
+            QrMode = source.QrMode,
+            QrErrorCorrectionLevel = source.QrErrorCorrectionLevel,
+            InnerElements = source.InnerElements.Select(CloneTableInnerElement).ToList(),
+        };
+    }
+
+    /// <summary>
+    /// 复制表格内部元素，保证回写后的模板数据与编辑窗口工作副本完全隔离。
+    /// </summary>
+    private static TableCellInnerElement CloneTableInnerElement(TableCellInnerElement source)
+    {
+        return source switch
+        {
+            TableCellTextElement textElement => new TableCellTextElement
+            {
+                Id = textElement.Id,
+                X = textElement.X,
+                Y = textElement.Y,
+                Width = textElement.Width,
+                Height = textElement.Height,
+                Rotation = textElement.Rotation,
+                Content = textElement.Content,
+                Font = textElement.Font,
+                XScale = textElement.XScale,
+                YScale = textElement.YScale,
+            },
+            TableCellBarcodeElement barcodeElement => new TableCellBarcodeElement
+            {
+                Id = barcodeElement.Id,
+                X = barcodeElement.X,
+                Y = barcodeElement.Y,
+                Width = barcodeElement.Width,
+                Height = barcodeElement.Height,
+                Rotation = barcodeElement.Rotation,
+                Content = barcodeElement.Content,
+                BarcodeType = barcodeElement.BarcodeType,
+                Narrow = barcodeElement.Narrow,
+                Wide = barcodeElement.Wide,
+                Readable = barcodeElement.Readable,
+            },
+            TableCellQrCodeElement qrCodeElement => new TableCellQrCodeElement
+            {
+                Id = qrCodeElement.Id,
+                X = qrCodeElement.X,
+                Y = qrCodeElement.Y,
+                Width = qrCodeElement.Width,
+                Height = qrCodeElement.Height,
+                Rotation = qrCodeElement.Rotation,
+                Content = qrCodeElement.Content,
+                ErrorCorrectionLevel = qrCodeElement.ErrorCorrectionLevel,
+                CellWidth = qrCodeElement.CellWidth,
+                Mode = qrCodeElement.Mode,
+            },
+            _ => throw new InvalidOperationException("Unsupported cell inner element type."),
+        };
     }
 
     /// <summary>

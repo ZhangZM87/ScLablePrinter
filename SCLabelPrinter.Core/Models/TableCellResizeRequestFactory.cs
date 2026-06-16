@@ -13,11 +13,13 @@ public static class TableCellResizeRequestFactory
         ArgumentNullException.ThrowIfNull(table);
 
         var safeColumnIndex = NormalizeColumnIndex(table, columnIndex);
+        var columnWidths = table.ColumnWidths.ToArray();
         return new TableCellResizeRequest(
             table.Id,
             TableCellResizeMode.Column,
             safeColumnIndex,
-            table.GetColumnWidth(safeColumnIndex));
+            columnWidths[safeColumnIndex],
+            ColumnWidths: columnWidths);
     }
 
     /// <summary>

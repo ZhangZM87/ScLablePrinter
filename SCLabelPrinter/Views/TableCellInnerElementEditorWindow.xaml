@@ -6,162 +6,299 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="clr-namespace:SCLabelPrinter.Core.Models;assembly=SCLabelPrinter.Core"
     Title="编辑单元格内部元素"
-    Width="640"
-    Height="500"
+    Width="980"
+    Height="680"
     Background="#FFF6F7F9"
     WindowStartupLocation="CenterOwner"
     mc:Ignorable="d">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    </Window.Resources>
     <Border
         Padding="18"
         Background="White"
         BorderBrush="#FFCACDD4"
         BorderThickness="1"
         CornerRadius="12">
-        <DockPanel>
-            <TextBlock
-                FontSize="16"
-                FontWeight="Bold"
-                Foreground="#FF22272E"
-                Text="单元格内部元素" />
-
-            <Grid Margin="0,16,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="240" />
-                    <ColumnDefinition Width="12" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch" Margin="0,0,0,12">
-                        <Button
-                            Margin="0,0,8,0"
-                            Padding="8,4"
-                            Content="添加文本"
-                            Command="{Binding AddTextElementCommand}" />
-                        <Button
-                            Margin="0,0,8,0"
-                            Padding="8,4"
-                            Content="添加条码"
-                            Command="{Binding AddBarcodeElementCommand}" />
-                        <Button
-                            Padding="8,4"
-                            Content="添加二维码"
-                            Command="{Binding AddQrCodeElementCommand}" />
-                    </StackPanel>
-
-                    <ListBox
-                        ItemsSource="{Binding InnerElements}"
-                        SelectedItem="{Binding SelectedInnerElement, Mode=TwoWay}"
-                        DisplayMemberPath="ToString"
-                        MinHeight="300"
-                        BorderBrush="#FFE2E5EB"
-                        BorderThickness="1"
-                        Background="#FFF7F8FB" />
-
-                    <Button
-                        Margin="0,12,0,0"
-                        Padding="8,6"
-                        Content="删除选中元素"
-                        Command="{Binding RemoveSelectedInnerElementCommand}" />
-                </StackPanel>
-
-                <Border Grid.Column="2"
-                        Padding="12"
-                        Background="#FFF7F8FB"
-                        BorderBrush="#FFE2E5EB"
-                        BorderThickness="1"
-                        CornerRadius="8">
-                    <StackPanel>
-                        <TextBlock FontWeight="SemiBold" Text="当前元素属性" />
-                        <TextBlock Margin="0,12,0,0" Text="内容" />
-                        <TextBox
-                            Text="{Binding SelectedContent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                            Margin="0,4,0,0"
-                            Height="26" />
-
-                        <UniformGrid Columns="2" Margin="0,12,0,0" HorizontalAlignment="Stretch">
-                            <StackPanel>
-                                <TextBlock Text="X" />
-                                <TextBox Text="{Binding SelectedX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="26" />
-                            </StackPanel>
-                            <StackPanel>
-                                <TextBlock Text="Y" />
-                                <TextBox Text="{Binding SelectedY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="26" />
-                            </StackPanel>
-                            <StackPanel>
-                                <TextBlock Text="宽度" />
-                                <TextBox Text="{Binding SelectedWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="26" />
-                            </StackPanel>
-                            <StackPanel>
-                                <TextBlock Text="高度" />
-                                <TextBox Text="{Binding SelectedHeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="26" />
-                            </StackPanel>
-                        </UniformGrid>
-
-                        <Border Margin="0,12,0,0" Padding="10" Background="WhiteSmoke" CornerRadius="6">
-                            <StackPanel>
-                                <TextBlock FontWeight="SemiBold" Text="条码设置" />
-                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Left">
-                                    <TextBlock Width="80" VerticalAlignment="Center" Text="类型" />
-                                    <ComboBox
-                                        Width="180"
-                                        SelectedValue="{Binding SelectedBarcodeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                        SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="Code39" Tag="{x:Static models:BarcodeType.Code39}" />
-                                        <ComboBoxItem Content="Code128" Tag="{x:Static models:BarcodeType.Code128}" />
-                                        <ComboBoxItem Content="Ean13" Tag="{x:Static models:BarcodeType.Ean13}" />
-                                    </ComboBox>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0" HorizontalAlignment="Left">
-                                    <CheckBox Content="可读" IsChecked="{Binding SelectedBarcodeReadable, Mode=TwoWay}" />
-                                </StackPanel>
-                                <UniformGrid Columns="2" Margin="0,8,0,0">
-                                    <StackPanel>
-                                        <TextBlock Text="窄条宽度" />
-                                        <TextBox Text="{Binding SelectedBarcodeNarrow, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="26" />
-                                    </StackPanel>
-                                    <StackPanel>
-                                        <TextBlock Text="宽条宽度" />
-                                        <TextBox Text="{Binding SelectedBarcodeWide, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="26" />
-                                    </StackPanel>
-                                </UniformGrid>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Margin="0,12,0,0" Padding="10" Background="WhiteSmoke" CornerRadius="6">
-                            <StackPanel>
-                                <TextBlock FontWeight="SemiBold" Text="二维码设置" />
-                                <UniformGrid Columns="3" Margin="0,8,0,0">
-                                    <StackPanel>
-                                        <TextBlock Text="大小" />
-                                        <TextBox Text="{Binding SelectedQrCellWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="26" />
-                                    </StackPanel>
-                                    <StackPanel>
-                                        <TextBlock Text="纠错级别" />
-                                        <TextBox Text="{Binding SelectedQrErrorCorrectionLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="26" />
-                                    </StackPanel>
-                                    <StackPanel>
-                                        <TextBlock Text="模式" />
-                                        <TextBox Text="{Binding SelectedQrMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="26" />
-                                    </StackPanel>
-                                </UniformGrid>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Border>
-            </Grid>
+        <DockPanel LastChildFill="True">
+            <StackPanel DockPanel.Dock="Top">
+                <TextBlock
+                    FontSize="18"
+                    FontWeight="Bold"
+                    Foreground="#FF22272E"
+                    Text="单元格内部元素编辑器" />
+                <TextBlock
+                    Margin="0,6,0,0"
+                    Foreground="#FF5B6678"
+                    Text="左侧维护元素栈，右侧仅显示当前类型的参数，避免无关配置相互干扰。"
+                    TextWrapping="Wrap" />
+            </StackPanel>
 
             <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
                 <Button
-                    Width="90"
+                    Width="96"
                     Margin="0,0,10,0"
                     Click="CancelButton_Click"
                     Content="取消" />
                 <Button
-                    Width="90"
+                    Width="96"
                     Content="确定"
                     Click="OkButton_Click" />
             </StackPanel>
+
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border
+                    Grid.Column="0"
+                    Padding="12"
+                    Background="#FFF7F8FB"
+                    BorderBrush="#FFE2E5EB"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <WrapPanel>
+                                <Button Margin="0,0,8,8" Padding="10,6" Content="添加文本" Command="{Binding AddTextElementCommand}" />
+                                <Button Margin="0,0,8,8" Padding="10,6" Content="添加条码" Command="{Binding AddBarcodeElementCommand}" />
+                                <Button Margin="0,0,0,8" Padding="10,6" Content="添加二维码" Command="{Binding AddQrCodeElementCommand}" />
+                            </WrapPanel>
+                            <TextBlock Foreground="#FF5B6678" Text="元素栈" />
+                        </StackPanel>
+
+                        <Button
+                            DockPanel.Dock="Bottom"
+                            Margin="0,12,0,0"
+                            Padding="10,8"
+                            Content="删除选中元素"
+                            Command="{Binding RemoveSelectedInnerElementCommand}" />
+
+                        <ListBox
+                            ItemsSource="{Binding InnerElements}"
+                            SelectedItem="{Binding SelectedInnerElement, Mode=TwoWay}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Margin="0,0,0,8"
+                                        Padding="10"
+                                        Background="White"
+                                        BorderBrush="#FFE2E5EB"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold" Foreground="#FF22272E" Text="{Binding}" />
+                                            <TextBlock
+                                                Margin="0,4,0,0"
+                                                Foreground="#FF5B6678"
+                                                Text="{Binding Rotation, StringFormat=旋转 {0}°}"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                <Border
+                    Grid.Column="2"
+                    Padding="16"
+                    Background="#FFF7F8FB"
+                    BorderBrush="#FFE2E5EB"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <Border
+                                Padding="12"
+                                Background="White"
+                                BorderBrush="#FFE2E5EB"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Foreground="#FF22272E" Text="当前选中元素" />
+                                    <TextBlock Margin="0,6,0,0" FontSize="16" FontWeight="Bold" Foreground="#FF1D4E8E" Text="{Binding SelectedElementTypeName}" />
+                                    <TextBlock
+                                        Margin="0,6,0,0"
+                                        Foreground="#FF5B6678"
+                                        Text="内容编辑、尺寸、旋转和类型专属配置都在这里，修改后先点“应用当前元素”，再点“确定”提交整个单元格。"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Margin="0,16,0,0" FontWeight="SemiBold" Text="通用属性" />
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <StackPanel Grid.Row="0" Grid.ColumnSpan="3">
+                                    <TextBlock Text="内容" />
+                                    <TextBox
+                                        Margin="0,6,0,0"
+                                        MinHeight="72"
+                                        AcceptsReturn="True"
+                                        Text="{Binding SelectedContent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        TextWrapping="Wrap"
+                                        VerticalScrollBarVisibility="Auto" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,12,0,0">
+                                    <TextBlock Text="X" />
+                                    <TextBox Margin="0,6,0,0" Text="{Binding SelectedX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,12,0,0">
+                                    <TextBlock Text="Y" />
+                                    <TextBox Margin="0,6,0,0" Text="{Binding SelectedY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,12,0,0">
+                                    <TextBlock Text="宽度" />
+                                    <TextBox Margin="0,6,0,0" Text="{Binding SelectedWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,12,0,0">
+                                    <TextBlock Text="高度" />
+                                    <TextBox Margin="0,6,0,0" Text="{Binding SelectedHeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <StackPanel Margin="0,12,0,0">
+                                <TextBlock Text="旋转角度" />
+                                <TextBox Margin="0,6,0,0" Text="{Binding SelectedRotation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+
+                            <Border
+                                Margin="0,16,0,0"
+                                Padding="12"
+                                Background="White"
+                                BorderBrush="#FFE2E5EB"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Visibility="{Binding IsTextInnerElementSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Text="文本设置" />
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="字体编号" />
+                                            <TextBox Margin="0,6,0,0" Text="{Binding SelectedTextFont, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="横向缩放" />
+                                            <TextBox Margin="0,6,0,0" Text="{Binding SelectedTextXScale, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="4">
+                                            <TextBlock Text="纵向缩放" />
+                                            <TextBox Margin="0,6,0,0" Text="{Binding SelectedTextYScale, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border
+                                Margin="0,16,0,0"
+                                Padding="12"
+                                Background="White"
+                                BorderBrush="#FFE2E5EB"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Visibility="{Binding IsBarcodeInnerElementSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Text="条码设置" />
+                                    <StackPanel Margin="0,10,0,0">
+                                        <TextBlock Text="类型" />
+                                        <ComboBox
+                                            Margin="0,6,0,0"
+                                            SelectedValue="{Binding SelectedBarcodeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            SelectedValuePath="Tag">
+                                            <ComboBoxItem Content="Code39" Tag="{x:Static models:BarcodeType.Code39}" />
+                                            <ComboBoxItem Content="Code128" Tag="{x:Static models:BarcodeType.Code128}" />
+                                            <ComboBoxItem Content="Ean13" Tag="{x:Static models:BarcodeType.Ean13}" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <CheckBox Margin="0,12,0,0" Content="显示可读文本" IsChecked="{Binding SelectedBarcodeReadable, Mode=TwoWay}" />
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="窄条宽度" />
+                                            <TextBox Margin="0,6,0,0" Text="{Binding SelectedBarcodeNarrow, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="宽条宽度" />
+                                            <TextBox Margin="0,6,0,0" Text="{Binding SelectedBarcodeWide, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border
+                                Margin="0,16,0,0"
+                                Padding="12"
+                                Background="White"
+                                BorderBrush="#FFE2E5EB"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Visibility="{Binding IsQrInnerElementSelected, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Text="二维码设置" />
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="大小" />
+                                            <TextBox Margin="0,6,0,0" Text="{Binding SelectedQrCellWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="纠错级别" />
+                                            <TextBox Margin="0,6,0,0" Text="{Binding SelectedQrErrorCorrectionLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="4">
+                                            <TextBlock Text="模式" />
+                                            <TextBox Margin="0,6,0,0" Text="{Binding SelectedQrMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Button
+                                Margin="0,16,0,0"
+                                Padding="10,8"
+                                HorizontalAlignment="Left"
+                                Content="应用当前元素"
+                                Command="{Binding ApplySelectedInnerElementChangesCommand}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
         </DockPanel>
     </Border>
 </Window>

@@ -86,7 +86,7 @@ public partial class PrinterViewModel : ObservableObject
     /// <summary>
     /// 连接当前选择的打印机。
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanConnect))]
+    [RelayCommand]
     private async Task ConnectAsync()
     {
         if (SelectedPrinter is null)
