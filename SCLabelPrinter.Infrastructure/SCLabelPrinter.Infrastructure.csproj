@@ -5,6 +5,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.102.3" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="libUsbContorl">
       <HintPath>..\..\C#\C#\C#版例程 20230523 Win10 21H2及Win11 USB\GprinterDemo230518\bin\Debug\libUsbContorl.dll</HintPath>
       <Private>true</Private>

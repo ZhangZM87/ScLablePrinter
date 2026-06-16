@@ -51,13 +51,66 @@ public sealed class LabelCanvas : FrameworkElement
     private readonly Brush _tableAlternateRowBrush = new SolidColorBrush(Color.FromArgb(24, 0xEA, 0xEA, 0xF0));
     private readonly Pen _tableBorderPen = new(new SolidColorBrush(Color.FromRgb(0x25, 0x27, 0x2E)), 1.6)
     {
-        DashStyle = new DashStyle(new double[] { 2, 2 }, 0),
+        DashStyle = new DashStyle(new double[] { 4, 2 }, 0),
+        DashCap = PenLineCap.Flat,
     };
     private readonly Pen _tableGridPen = new(new SolidColorBrush(Color.FromRgb(0x9A, 0x9E, 0xAC)), 0.7)
     {
-        DashStyle = new DashStyle(new double[] { 2, 2 }, 0),
+        DashStyle = new DashStyle(new double[] { 4, 2 }, 0),
+        DashCap = PenLineCap.Flat,
     };
     private string? _draggingElementId;
+
+    /// <summary>
+    /// 框选起始点（屏幕坐标）。
+    /// </summary>
+    /// <summary>
+    /// 正在拖拽缩放的普通元素 ID。
+    /// </summary>
+    private string? _resizingElementId;
+    private Point _elementResizeStart;
+    private int _elementResizeOriginalWidth;
+    private int _elementResizeOriginalHeight;
+    private int _elementResizeOriginalX;
+    private int _elementResizeOriginalY;
+    private int _elementResizeCorner; // 0=右下 1=右上 2=左下 3=左上
+    private const double ResizeHandleSize = 8.0;
+    private static readonly Brush _resizeHandleBrush = new SolidColorBrush(Color.FromRgb(0x1D, 0x4E, 0x8E));
+
+    private Point? _marqueeStart;
+
+    /// <summary>
+    /// 框选当前点（屏幕坐标）。
+    /// </summary>
+    private Point _marqueeCurrent;
+
+    /// <summary>
+    /// 当前被多选中的元素 ID 集合。
+    /// </summary>
+    private readonly HashSet<string> _multiSelectedIds = new();
+
+    /// <summary>
+    /// 多选拖拽起始点。
+    /// </summary>
+    private Point? _multiDragStart;
+
+    /// <summary>
+    /// 多选拖拽时各元素的原始位置。
+    /// </summary>
+    private readonly Dictionary<string, (int X, int Y)> _multiDragOriginalPositions = new();
+
+    /// <summary>
+    /// 框选矩形画笔。
+    /// </summary>
+    private static readonly Pen _marqueePen = new(new SolidColorBrush(Color.FromRgb(0x33, 0x99, 0xFF)), 1.0)
+    {
+        DashStyle = DashStyles.Dash,
+    };
+    private static readonly Brush _marqueeFill = new SolidColorBrush(Color.FromArgb(0x20, 0x33, 0x99, 0xFF));
+    private static readonly Pen _multiSelectPen = new(new SolidColorBrush(Color.FromRgb(0x33, 0x99, 0xFF)), 1.5)
+    {
+        DashStyle = DashStyles.Dash,
+    };
     private Point _dragOffset;
     private TableCellInnerElementHit? _draggingCellInnerElement;
     private TableInteractionPoint _dragOffsetInner;
@@ -116,6 +169,35 @@ public sealed class LabelCanvas : FrameworkElement
         typeof(string),
         typeof(LabelCanvas),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty SelectedElementIdsProperty = DependencyProperty.Register(
+        nameof(SelectedElementIds),
+        typeof(IReadOnlySet<string>),
+        typeof(LabelCanvas),
+        new PropertyMetadata(null));
+
+    /// <summary>
+    /// 当前多选中的元素 ID 集合，供 ViewModel 绑定。
+    /// </summary>
+    public IReadOnlySet<string>? SelectedElementIds
+    {
+        get => (IReadOnlySet<string>?)GetValue(SelectedElementIdsProperty);
+        set => SetValue(SelectedElementIdsProperty, value);
+    }
+
+    public static readonly DependencyProperty MultiElementMovedCommandProperty = DependencyProperty.Register(
+        nameof(MultiElementMovedCommand),
+        typeof(ICommand),
+        typeof(LabelCanvas));
+
+    /// <summary>
+    /// 多选元素整体移动后的通知命令。
+    /// </summary>
+    public ICommand? MultiElementMovedCommand
+    {
+        get => (ICommand?)GetValue(MultiElementMovedCommandProperty);
+        set => SetValue(MultiElementMovedCommandProperty, value);
+    }
 
     public static readonly DependencyProperty ElementSelectedCommandProperty = DependencyProperty.Register(
         nameof(ElementSelectedCommand),
@@ -216,6 +298,83 @@ public sealed class LabelCanvas : FrameworkElement
     /// <summary>
     /// 在控件表面绘制标签边界和全部元素预览。
     /// </summary>
+    /// <summary>
+    /// 获取普通元素的宽高（用于缩放手柄计算）。
+    /// </summary>
+    private static (int W, int H) GetElementSize(LabelElement el)
+    {
+        return el switch
+        {
+            LineElement l => (l.Width, l.Height),
+            EraseElement e => (e.Width, e.Height),
+            BitmapElement b => (b.Width, b.Height),
+            BoxElement box => (box.EndX - box.X, box.EndY - box.Y),
+            TableElement t => (t.TotalWidth, t.TotalHeight),
+            BarcodeElement bc => (Math.Max(80, bc.Narrow * 60), bc.Height),
+            QrCodeElement qr => (qr.CellWidth * 20, qr.CellWidth * 20),
+            TextElement txt => (Math.Max(40, txt.XScale * 60), Math.Max(20, txt.YScale * 24)),
+            _ => (40, 20),
+        };
+    }
+
+    /// <summary>
+    /// 设置普通元素的宽高。
+    /// </summary>
+    private static void SetElementSize(LabelElement el, int w, int h)
+    {
+        switch (el)
+        {
+            case LineElement l: l.Width = w; l.Height = Math.Max(1, h); break;
+            case EraseElement e: e.Width = w; e.Height = h; break;
+            case BitmapElement b: b.Width = w; b.Height = h; break;
+            case BoxElement box: box.EndX = box.X + w; box.EndY = box.Y + h; break;
+            case BarcodeElement bc: bc.Height = Math.Max(10, h); break;
+            case QrCodeElement qr: qr.CellWidth = Math.Max(1, Math.Min(w, h) / 20); break;
+            case TextElement txt: txt.XScale = Math.Max(1, w / 60); txt.YScale = Math.Max(1, h / 24); break;
+        }
+    }
+
+    /// <summary>
+    /// 检测鼠标是否命中普通元素的缩放手柄，返回命中的角索引（0-3）或 -1。
+    /// </summary>
+    private int HitTestElementResizeHandle(Point mouse, LabelElement el, double scale, Point origin)
+    {
+        var bounds = GetElementBounds(el, scale, origin);
+        var hs = ResizeHandleSize;
+        var corners = new[]
+        {
+            new Rect(bounds.Right - hs, bounds.Bottom - hs, hs, hs),
+            new Rect(bounds.Right - hs, bounds.Top, hs, hs),
+            new Rect(bounds.Left, bounds.Bottom - hs, hs, hs),
+            new Rect(bounds.Left, bounds.Top, hs, hs),
+        };
+        for (var i = 0; i < corners.Length; i++)
+        {
+            if (corners[i].Contains(mouse)) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// 绘制元素的四角缩放手柄。
+    /// </summary>
+    private void DrawElementResizeHandles(DrawingContext dc, LabelElement el, double scale, Point origin)
+    {
+        var bounds = GetElementBounds(el, scale, origin);
+        var hs = ResizeHandleSize;
+        var corners = new[]
+        {
+            new Rect(bounds.Right - hs, bounds.Bottom - hs, hs, hs),
+            new Rect(bounds.Right - hs, bounds.Top, hs, hs),
+            new Rect(bounds.Left, bounds.Bottom - hs, hs, hs),
+            new Rect(bounds.Left, bounds.Top, hs, hs),
+        };
+        foreach (var corner in corners)
+        {
+            dc.DrawRectangle(_resizeHandleBrush, null, corner);
+        }
+    }
+
     protected override void OnRender(DrawingContext drawingContext)
     {
         base.OnRender(drawingContext);
@@ -243,6 +402,35 @@ public sealed class LabelCanvas : FrameworkElement
         }
         drawingContext.Pop();
 
+        if (_multiSelectedIds.Count > 0 && Template is not null)
+        {
+            foreach (var id in _multiSelectedIds)
+            {
+                var el = Template.Elements.FirstOrDefault(x => x.Id == id);
+                if (el is not null)
+                {
+                    var elBounds = GetElementBounds(el, scale, origin);
+                    drawingContext.DrawRectangle(null, _multiSelectPen, elBounds);
+                }
+            }
+        }
+
+        if (_multiSelectedIds.Count == 0 && SelectedElementId is not null && Template is not null)
+        {
+            var selEl = Template.Elements.FirstOrDefault(x => x.Id == SelectedElementId);
+            if (selEl is not null)
+            {
+                var selBounds = GetElementBounds(selEl, scale, origin);
+                drawingContext.DrawRectangle(null, _selectionPen, selBounds);
+                DrawElementResizeHandles(drawingContext, selEl, scale, origin);
+            }
+        }
+
+        if (_marqueeStart is not null)
+        {
+            var marqueeRect = new Rect(_marqueeStart.Value, _marqueeCurrent);
+            drawingContext.DrawRectangle(_marqueeFill, _marqueePen, marqueeRect);
+        }
     }
 
     /// <summary>
@@ -314,6 +502,29 @@ public sealed class LabelCanvas : FrameworkElement
             return;
         }
 
+        if (SelectedElementId is not null)
+        {
+            var selForResize = Template.Elements.FirstOrDefault(x => x.Id == SelectedElementId);
+            if (selForResize is not null && selForResize is not TableElement)
+            {
+                var corner = HitTestElementResizeHandle(mousePoint, selForResize, scale, origin);
+                if (corner >= 0)
+                {
+                    var sz = GetElementSize(selForResize);
+                    _resizingElementId = selForResize.Id;
+                    _elementResizeCorner = corner;
+                    _elementResizeStart = mousePoint;
+                    _elementResizeOriginalWidth = sz.W;
+                    _elementResizeOriginalHeight = sz.H;
+                    _elementResizeOriginalX = selForResize.X;
+                    _elementResizeOriginalY = selForResize.Y;
+                    CaptureMouse();
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
         var hitInner = GetHitTableCellInnerElement(mousePoint, scale, origin);
         if (hitInner is not null)
         {
@@ -335,9 +546,50 @@ public sealed class LabelCanvas : FrameworkElement
         var hitElement = GetHitElement(mousePoint, scale, origin);
         if (hitElement is null)
         {
+            _marqueeStart = mousePoint;
+            _marqueeCurrent = mousePoint;
+            _multiSelectedIds.Clear();
+            CaptureMouse();
+            e.Handled = true;
             return;
         }
 
+        if (_multiSelectedIds.Count > 1 && _multiSelectedIds.Contains(hitElement.Id))
+        {
+            _multiDragStart = mousePoint;
+            _multiDragOriginalPositions.Clear();
+            foreach (var id in _multiSelectedIds)
+            {
+                var el = Template.Elements.FirstOrDefault(x => x.Id == id);
+                if (el is not null)
+                {
+                    _multiDragOriginalPositions[id] = (el.X, el.Y);
+                }
+            }
+            CaptureMouse();
+            SelectedElementId = hitElement.Id;
+            e.Handled = true;
+            return;
+        }
+
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            if (_multiSelectedIds.Contains(hitElement.Id))
+            {
+                _multiSelectedIds.Remove(hitElement.Id);
+            }
+            else
+            {
+                _multiSelectedIds.Add(hitElement.Id);
+            }
+            SelectedElementIds = new HashSet<string>(_multiSelectedIds);
+            SelectedElementId = hitElement.Id;
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        _multiSelectedIds.Clear();
         _draggingElementId = hitElement.Id;
         var elementBounds = GetElementBounds(hitElement, scale, origin);
         _dragOffset = new Point(mousePoint.X - elementBounds.X, mousePoint.Y - elementBounds.Y);
@@ -580,6 +832,63 @@ public sealed class LabelCanvas : FrameworkElement
         var surface = CreateSurfaceRect();
         var (scale, origin) = CalculateScale(surface, Template.Label, ZoomFactor);
 
+        if (_marqueeStart is not null)
+        {
+            _marqueeCurrent = mousePoint;
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        if (_multiDragStart is not null && _multiDragOriginalPositions.Count > 0)
+        {
+            var deltaX = (int)Math.Round((mousePoint.X - _multiDragStart.Value.X) / scale);
+            var deltaY = (int)Math.Round((mousePoint.Y - _multiDragStart.Value.Y) / scale);
+            foreach (var kvp in _multiDragOriginalPositions)
+            {
+                var el = Template.Elements.FirstOrDefault(x => x.Id == kvp.Key);
+                if (el is not null)
+                {
+                    el.X = Math.Max(0, kvp.Value.X + deltaX);
+                    el.Y = Math.Max(0, kvp.Value.Y + deltaY);
+                }
+            }
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        if (_resizingElementId is not null && Template is not null)
+        {
+            var resEl = Template.Elements.FirstOrDefault(x => x.Id == _resizingElementId);
+            if (resEl is not null)
+            {
+                var dx = (int)Math.Round((mousePoint.X - _elementResizeStart.X) / scale);
+                var dy = (int)Math.Round((mousePoint.Y - _elementResizeStart.Y) / scale);
+                var newW = _elementResizeOriginalWidth;
+                var newH = _elementResizeOriginalHeight;
+                var newX = _elementResizeOriginalX;
+                var newY = _elementResizeOriginalY;
+                switch (_elementResizeCorner)
+                {
+                    case 0: newW += dx; newH += dy; break;
+                    case 1: newW += dx; newH -= dy; newY += dy; break;
+                    case 2: newW -= dx; newH += dy; newX += dx; break;
+                    case 3: newW -= dx; newH -= dy; newX += dx; newY += dy; break;
+                }
+                newW = Math.Max(10, newW);
+                newH = Math.Max(10, newH);
+                newX = Math.Max(0, newX);
+                newY = Math.Max(0, newY);
+                resEl.X = newX;
+                resEl.Y = newY;
+                SetElementSize(resEl, newW, newH);
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (_innerElementResizeMode != InnerElementResizeMode.None && _resizingCellInnerElement is not null)
         {
             var deltaX = mousePoint.X - _resizeStartPointInner.X;
@@ -726,6 +1035,75 @@ public sealed class LabelCanvas : FrameworkElement
 
         if (IsMouseCaptured)
         {
+            if (_marqueeStart is not null)
+            {
+                var surface = CreateSurfaceRect();
+                var (scale, origin) = CalculateScale(surface, Template.Label, ZoomFactor);
+                var marqueeRect = new Rect(_marqueeStart.Value, _marqueeCurrent);
+                _multiSelectedIds.Clear();
+                foreach (var element in Template.Elements)
+                {
+                    var bounds = GetElementBounds(element, scale, origin);
+                    if (marqueeRect.IntersectsWith(bounds))
+                    {
+                        _multiSelectedIds.Add(element.Id);
+                    }
+                }
+                _marqueeStart = null;
+                SelectedElementIds = new HashSet<string>(_multiSelectedIds);
+                if (_multiSelectedIds.Count == 1)
+                {
+                    SelectedElementId = _multiSelectedIds.First();
+                }
+                ReleaseMouseCapture();
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+
+            if (_multiDragStart is not null)
+            {
+                var cmd = MultiElementMovedCommand;
+                if (cmd is not null)
+                {
+                    var moves = _multiDragOriginalPositions.Keys
+                        .Select(id => Template.Elements.FirstOrDefault(x => x.Id == id))
+                        .Where(el => el is not null)
+                        .Select(el => new ElementMoveRequest(el!.Id, el.X, el.Y))
+                        .ToList();
+                    if (cmd.CanExecute(moves))
+                    {
+                        cmd.Execute(moves);
+                    }
+                }
+                _multiDragStart = null;
+                _multiDragOriginalPositions.Clear();
+                ReleaseMouseCapture();
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+
+            if (_resizingElementId is not null)
+            {
+                var resEl = Template?.Elements.FirstOrDefault(x => x.Id == _resizingElementId);
+                if (resEl is not null)
+                {
+                    var sz = GetElementSize(resEl);
+                    var moveCmd = ElementMovedCommand;
+                    if (moveCmd is not null)
+                    {
+                        var req = new ElementMoveRequest(resEl.Id, resEl.X, resEl.Y);
+                        if (moveCmd.CanExecute(req)) moveCmd.Execute(req);
+                    }
+                }
+                _resizingElementId = null;
+                ReleaseMouseCapture();
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+
             if (_tableResizeMode != TableResizeMode.None && _resizingTableElement is not null)
             {
                 var resizeCommand = TableCellResizeCommand;
@@ -1508,7 +1886,7 @@ public sealed class LabelCanvas : FrameworkElement
         var tableRect = new Rect(left, top, totalWidth, totalHeight);
         var borderPen = element.BorderStyle == TableLineStyle.Dashed ? _tableBorderPen : new Pen(_tableBorderPen.Brush, _tableBorderPen.Thickness);
 
-        drawingContext.DrawRoundedRectangle(_tableBackgroundBrush, borderPen, tableRect, 4, 4);
+        drawingContext.DrawRectangle(_tableBackgroundBrush, borderPen, tableRect);
 
         for (var rowIndex = 0; rowIndex < element.Rows; rowIndex++)
         {
@@ -1574,27 +1952,27 @@ public sealed class LabelCanvas : FrameworkElement
                         case TableCellContentType.Text:
                             {
                                 var contentRect = new Rect(cellLeft + 8, cellTop + 6, Math.Max(1, cellWidth - 16), Math.Max(1, cellHeight - 12));
+                                var cellFontSize = Math.Max(8, 14 * scale);
                                 var formattedText = new FormattedText(
                                     cell.Content,
                                     CultureInfo.CurrentUICulture,
                                     FlowDirection.LeftToRight,
                                     new Typeface("Microsoft YaHei UI"),
-                                    Math.Max(10, 12 * scale),
+                                    cellFontSize,
                                     _foregroundBrush,
                                     VisualTreeHelper.GetDpi(this).PixelsPerDip)
                                 {
                                     MaxTextWidth = contentRect.Width,
                                     MaxTextHeight = contentRect.Height,
-                                    TextAlignment = TextAlignment.Center,
+                                    TextAlignment = cell.Alignment switch
+                                    {
+                                        LabelTextAlignment.Center => TextAlignment.Center,
+                                        LabelTextAlignment.Right => TextAlignment.Right,
+                                        _ => TextAlignment.Left,
+                                    },
                                 };
-                                var textX = contentRect.X + (contentRect.Width - formattedText.Width) / 2;
                                 var textY = contentRect.Y + (contentRect.Height - formattedText.Height) / 2;
-                                var renderedRect = new Rect(
-                                    Math.Max(contentRect.X, textX),
-                                    Math.Max(contentRect.Y, textY),
-                                    formattedText.Width,
-                                    formattedText.Height);
-                                drawingContext.DrawText(formattedText, new Point(renderedRect.X, renderedRect.Y));
+                                drawingContext.DrawText(formattedText, new Point(contentRect.X, Math.Max(contentRect.Y, textY)));
                                 break;
                             }
                         case TableCellContentType.Barcode:

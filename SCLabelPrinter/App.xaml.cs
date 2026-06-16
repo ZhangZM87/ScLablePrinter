@@ -9,6 +9,10 @@ using SCLabelPrinter.Core.Storage;
 using SCLabelPrinter.Infrastructure.Native;
 using SCLabelPrinter.Infrastructure.Printers;
 using SCLabelPrinter.Infrastructure.Storage;
+using SCLabelPrinter.Infrastructure.Excel;
+using SCLabelPrinter.Core.Services;
+using SCLabelPrinter.Core.Export;
+using SCLabelPrinter.Core.Export.Tspl;
 using SCLabelPrinter.Services;
 using SCLabelPrinter.ViewModels;
 
@@ -75,6 +79,12 @@ public partial class App : Application
 		services.AddSingleton<LabelTemplateSerializer>();
 		services.AddSingleton<ILabelTemplateStorageService, LabelTemplateStorageService>();
 		services.AddSingleton<IPrintFileService, PrintFileService>();
+
+		services.AddSingleton<IExcelImportService, ClosedXmlExcelImportService>();
+
+		// Export layer
+		services.AddSingleton<ILabelExporter, TsplExporter>();
+		services.AddSingleton<IExporterFactory, ExporterFactory>();
 
 		services.AddSingleton<PrinterViewModel>();
 		services.AddSingleton<EditorViewModel>();

@@ -32,11 +32,22 @@ public sealed class TextElement : LabelElement
 {
     public string Font { get; set; } = "3";
 
+    /// <summary>
+    /// 字体大小（单位：dot），0 表示使用 Font 字号的默认大小。
+    /// </summary>
+    public int FontSizeDots { get; set; }
+
     public int XScale { get; set; } = 1;
 
     public int YScale { get; set; } = 1;
 
     public string Content { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 占位符名称，导出 TSPL 模板时替代实际内容，供外部软件按名称替换。
+    /// 为空时直接输出 Content 内容。
+    /// </summary>
+    public string Placeholder { get; set; } = string.Empty;
 
     /// <summary>
     /// 返回适合界面列表展示的文本元素摘要。
@@ -65,6 +76,11 @@ public sealed class BarcodeElement : LabelElement
     public string Content { get; set; } = string.Empty;
 
     /// <summary>
+    /// 占位符名称，导出模板时替代实际内容。
+    /// </summary>
+    public string Placeholder { get; set; } = string.Empty;
+
+    /// <summary>
     /// 返回适合界面列表展示的条码元素摘要。
     /// </summary>
     public override string ToString()
@@ -87,6 +103,11 @@ public sealed class QrCodeElement : LabelElement
     public string Content { get; set; } = string.Empty;
 
     /// <summary>
+    /// 占位符名称，导出模板时替代实际内容。
+    /// </summary>
+    public string Placeholder { get; set; } = string.Empty;
+
+    /// <summary>
     /// 返回适合界面列表展示的二维码元素摘要。
     /// </summary>
     public override string ToString()
@@ -98,7 +119,7 @@ public sealed class QrCodeElement : LabelElement
 /// <summary>
 /// 表示位图元素。
 /// </summary>
-public sealed class BitmapElement : LabelElement
+public sealed class BitmapElement : LabelElement, IResizable
 {
     public int Width { get; set; }
 
@@ -107,6 +128,14 @@ public sealed class BitmapElement : LabelElement
     public int Mode { get; set; }
 
     public byte[] Data { get; set; } = Array.Empty<byte>();
+
+    public int ElementWidth { get => Width; set => Width = value; }
+
+    public int ElementHeight { get => Height; set => Height = value; }
+
+    public int MinWidth => 8;
+
+    public int MinHeight => 8;
 
     /// <summary>
     /// 返回适合界面列表展示的位图元素摘要。
@@ -120,13 +149,21 @@ public sealed class BitmapElement : LabelElement
 /// <summary>
 /// 表示矩形框元素。
 /// </summary>
-public sealed class BoxElement : LabelElement
+public sealed class BoxElement : LabelElement, IResizable
 {
     public int EndX { get; set; }
 
     public int EndY { get; set; }
 
     public int Thickness { get; set; } = 2;
+
+    public int ElementWidth { get => EndX - X; set => EndX = X + value; }
+
+    public int ElementHeight { get => EndY - Y; set => EndY = Y + value; }
+
+    public int MinWidth => 4;
+
+    public int MinHeight => 4;
 
     /// <summary>
     /// 返回适合界面列表展示的矩形框元素摘要。
@@ -140,11 +177,34 @@ public sealed class BoxElement : LabelElement
 /// <summary>
 /// 表示线条元素。
 /// </summary>
-public sealed class LineElement : LabelElement
+public sealed class LineElement : LabelElement, IResizable
 {
     public int Width { get; set; }
 
     public int Height { get; set; } = 2;
+
+    public int ElementWidth { get => Width; set => Width = value; }
+
+    public int ElementHeight { get => Height; set => Height = value; }
+
+    public int MinWidth => 1;
+
+    public int MinHeight => 1;
+
+    /// <summary>
+    /// 线条样式：Solid（实线）、Dashed（虚线）、Dotted（点线）。
+    /// </summary>
+    public TableLineStyle Style { get; set; } = TableLineStyle.Solid;
+
+    /// <summary>
+    /// 虚线模式下每个线段的长度（单位：dot）。
+    /// </summary>
+    public int DashLength { get; set; } = 8;
+
+    /// <summary>
+    /// 虚线模式下线段之间间隔的长度（单位：dot）。
+    /// </summary>
+    public int GapLength { get; set; } = 4;
 
     /// <summary>
     /// 返回适合界面列表展示的线条元素摘要。
@@ -158,11 +218,19 @@ public sealed class LineElement : LabelElement
 /// <summary>
 /// 表示挖空区域元素，对应 TSPL ERASE 指令。
 /// </summary>
-public sealed class EraseElement : LabelElement
+public sealed class EraseElement : LabelElement, IResizable
 {
     public int Width { get; set; }
 
     public int Height { get; set; }
+
+    public int ElementWidth { get => Width; set => Width = value; }
+
+    public int ElementHeight { get => Height; set => Height = value; }
+
+    public int MinWidth => 1;
+
+    public int MinHeight => 1;
 
     /// <summary>
     /// 返回适合界面列表展示的挖空元素摘要。
@@ -171,6 +239,19 @@ public sealed class EraseElement : LabelElement
     {
         return $"挖空: {Width}x{Height}";
     }
+}
+
+/// <summary>
+/// 文本对齐方式。
+/// </summary>
+public enum LabelTextAlignment
+{
+    /// <summary>左对齐</summary>
+    Left,
+    /// <summary>居中</summary>
+    Center,
+    /// <summary>右对齐</summary>
+    Right,
 }
 
 /// <summary>
@@ -188,8 +269,12 @@ public enum TableCellContentType
 /// </summary>
 public enum TableLineStyle
 {
+    /// <summary>实线</summary>
     Solid,
+    /// <summary>虚线（长段间隔）</summary>
     Dashed,
+    /// <summary>点线（短点间隔）</summary>
+    Dotted,
 }
 
 /// <summary>
@@ -222,6 +307,11 @@ public sealed class TableCellTextElement : TableCellInnerElement
     public string Content { get; set; } = string.Empty;
 
     public string Font { get; set; } = "3";
+
+    /// <summary>
+    /// 文本对齐方式。
+    /// </summary>
+    public LabelTextAlignment Alignment { get; set; } = LabelTextAlignment.Left;
 
     public int XScale { get; set; } = 1;
 
@@ -280,6 +370,11 @@ public sealed class TableCell
 {
     public TableCellContentType ContentType { get; set; } = TableCellContentType.Text;
 
+    /// <summary>
+    /// 单元格文本对齐方式。
+    /// </summary>
+    public LabelTextAlignment Alignment { get; set; } = LabelTextAlignment.Left;
+
     public string Content { get; set; } = string.Empty;
 
     public BarcodeType BarcodeType { get; set; } = BarcodeType.Code128;
@@ -336,8 +431,16 @@ public sealed class TableCell
 /// <summary>
 /// 表示表格元素，支持自定义行列和每个单元格的内容类型。
 /// </summary>
-public sealed class TableElement : LabelElement
+public sealed class TableElement : LabelElement, IResizable
 {
+    public int ElementWidth { get => TotalWidth; set { /* 表格宽度由列宽决定 */ } }
+
+    public int ElementHeight { get => TotalHeight; set { /* 表格高度由行高决定 */ } }
+
+    public int MinWidth => Cols * 20;
+
+    public int MinHeight => Rows * 20;
+
     public int Rows { get; set; } = 2;
 
     public int Cols { get; set; } = 2;

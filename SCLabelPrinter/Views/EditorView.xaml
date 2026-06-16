@@ -37,8 +37,8 @@
                                                 <Button
                                                     Margin="0,8,0,0"
                                                     Padding="10,8"
-                                                    Command="{Binding Command}"
                                                     HorizontalContentAlignment="Left"
+                                                    Command="{Binding Command}"
                                                     Style="{StaticResource SecondaryButtonStyle}">
                                                     <StackPanel>
                                                         <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
@@ -67,6 +67,11 @@
                     <Button
                         Command="{Binding RemoveSelectedElementCommand}"
                         Content="删除选中元素"
+                        Style="{StaticResource ActionButtonStyle}" />
+                    <Button
+                        Margin="0,8,0,0"
+                        Command="{Binding ImportExcelToTableCommand}"
+                        Content="从 Excel 导入表格"
                         Style="{StaticResource ActionButtonStyle}" />
 
                     <TextBlock
@@ -169,6 +174,7 @@
                                     TableCellContextMenuCommand="{Binding TableCellContextMenuCommand}"
                                     TableCellInnerElementMovedCommand="{Binding TableCellInnerElementMoveCommand}"
                                     TableCellResizeCommand="{Binding TableCellResizeCommand}"
+                                    MultiElementMovedCommand="{Binding MultiElementMovedCommand}"
                                     Template="{Binding PreviewTemplate}"
                                     ZoomFactor="{Binding PreviewZoom}" />
                             </ScrollViewer>
@@ -245,6 +251,14 @@
                                     <TextBox Text="{Binding DataContext.SelectedTextContent, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="字体编号" />
                                     <TextBox Text="{Binding DataContext.SelectedFont, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="字体大小 (dot，0=默认)" />
+                                    <TextBox Text="{Binding DataContext.SelectedFontSizeDots, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="水平缩放" />
+                                    <TextBox Text="{Binding DataContext.SelectedTextXScale, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="垂直缩放" />
+                                    <TextBox Text="{Binding DataContext.SelectedTextYScale, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Margin="0,8,0,0" Style="{StaticResource CaptionTextStyle}" Text="占位符（留空=直接输出内容）" />
+                                    <TextBox Text="{Binding DataContext.SelectedPlaceholder, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
                             </DataTemplate>
                             <DataTemplate DataType="{x:Type models:BarcodeElement}">
@@ -257,12 +271,15 @@
                                         <ComboBoxItem Content="Code128" Tag="{x:Static models:BarcodeType.Code128}" />
                                         <ComboBoxItem Content="Ean13" Tag="{x:Static models:BarcodeType.Ean13}" />
                                     </ComboBox>
+                                    <CheckBox Content="显示条码文本" IsChecked="{Binding DataContext.SelectedBarcodeReadable, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,4,0,4" />
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="条码高度" />
                                     <TextBox Text="{Binding DataContext.SelectedBarcodeHeight, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="窄线宽" />
                                     <TextBox Text="{Binding DataContext.SelectedBarcodeNarrow, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="宽线宽" />
                                     <TextBox Text="{Binding DataContext.SelectedBarcodeWide, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Margin="0,8,0,0" Style="{StaticResource CaptionTextStyle}" Text="占位符" />
+                                    <TextBox Text="{Binding DataContext.SelectedPlaceholder, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
                             </DataTemplate>
                             <DataTemplate DataType="{x:Type models:QrCodeElement}">
@@ -273,6 +290,8 @@
                                     <TextBox Text="{Binding DataContext.SelectedQrErrorCorrectionLevel, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="单元大小" />
                                     <TextBox Text="{Binding DataContext.SelectedQrCellWidth, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Margin="0,8,0,0" Style="{StaticResource CaptionTextStyle}" Text="占位符" />
+                                    <TextBox Text="{Binding DataContext.SelectedPlaceholder, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
                             </DataTemplate>
                             <DataTemplate DataType="{x:Type models:BoxElement}">
@@ -291,6 +310,16 @@
                                     <TextBox Text="{Binding DataContext.SelectedLineWidth, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="高度" />
                                     <TextBox Text="{Binding DataContext.SelectedLineHeight, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="线条样式" />
+                                    <ComboBox SelectedValue="{Binding DataContext.SelectedLineStyle, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="实线" Tag="{x:Static models:TableLineStyle.Solid}" />
+                                        <ComboBoxItem Content="虚线" Tag="{x:Static models:TableLineStyle.Dashed}" />
+                                        <ComboBoxItem Content="点线" Tag="{x:Static models:TableLineStyle.Dotted}" />
+                                    </ComboBox>
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="虚线段长" />
+                                    <TextBox Text="{Binding DataContext.SelectedLineDashLength, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="间隔长度" />
+                                    <TextBox Text="{Binding DataContext.SelectedLineGapLength, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
                             </DataTemplate>
                             <DataTemplate DataType="{x:Type models:EraseElement}">
@@ -313,11 +342,19 @@
                                     <TextBox Text="{Binding DataContext.SelectedTableTotalWidth, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
                                     <TextBlock Style="{StaticResource CaptionTextStyle}" Text="整体高度" />
                                     <TextBox Text="{Binding DataContext.SelectedTableTotalHeight, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="线条样式（边框+网格）" />
+                                    <ComboBox SelectedValue="{Binding DataContext.SelectedTableBorderStyle, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="实线" Tag="{x:Static models:TableLineStyle.Solid}" />
+                                        <ComboBoxItem Content="虚线" Tag="{x:Static models:TableLineStyle.Dashed}" />
+                                        <ComboBoxItem Content="点线" Tag="{x:Static models:TableLineStyle.Dotted}" />
+                                    </ComboBox>
+
                                     <Button
                                         Margin="0,10,0,0"
                                         Command="{Binding DataContext.OpenSelectedTableSpreadsheetEditorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         Content="打开电子表格编辑器"
                                         Style="{StaticResource SecondaryButtonStyle}" />
+
                                     <TextBlock
                                         Margin="0,8,0,0"
                                         Foreground="{StaticResource MutedTextBrush}"
@@ -346,6 +383,11 @@
                             Content="另存为"
                             Style="{StaticResource SecondaryButtonStyle}" />
                     </WrapPanel>
+                    <Button
+                        Margin="0,8,0,0"
+                        Command="{Binding ExportTsplTemplateCommand}"
+                        Content="导出 TSPL 模板"
+                        Style="{StaticResource ActionButtonStyle}" />
 
                     <TextBlock
                         Margin="0,12,0,0"

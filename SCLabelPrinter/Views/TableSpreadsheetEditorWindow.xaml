@@ -120,6 +120,18 @@
                                 <ComboBoxItem Content="条码" Tag="{x:Static models:TableCellContentType.Barcode}" />
                                 <ComboBoxItem Content="二维码" Tag="{x:Static models:TableCellContentType.QrCode}" />
                             </ComboBox>
+                            <TextBlock
+                                Margin="0,8,0,4"
+                                Style="{StaticResource CaptionTextStyle}"
+                                Text="对齐方式" />
+                            <ComboBox
+                                IsEnabled="{Binding SelectedCellEditable}"
+                                SelectedValue="{Binding SelectedCellAlignment, Mode=TwoWay}"
+                                SelectedValuePath="Tag">
+                                <ComboBoxItem Content="左对齐" Tag="{x:Static models:LabelTextAlignment.Left}" />
+                                <ComboBoxItem Content="居中" Tag="{x:Static models:LabelTextAlignment.Center}" />
+                                <ComboBoxItem Content="右对齐" Tag="{x:Static models:LabelTextAlignment.Right}" />
+                            </ComboBox>
 
                             <TextBlock Margin="0,14,0,0" Text="内容" />
                             <TextBox

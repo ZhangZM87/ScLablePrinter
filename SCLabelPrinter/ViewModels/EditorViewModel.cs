@@ -10,8 +10,11 @@ using SCLabelPrinter.Core.Printing;
 using SCLabelPrinter.Core.Printers;
 using SCLabelPrinter.Core.Serialization;
 using SCLabelPrinter.Core.Storage;
+using SCLabelPrinter.Core.Services;
 using SCLabelPrinter.Services;
 using SCLabelPrinter.Views;
+using SCLabelPrinter.Core.Export.Tspl;
+using SCLabelPrinter.Core.Export;
 
 namespace SCLabelPrinter.ViewModels;
 
@@ -25,6 +28,7 @@ public partial class EditorViewModel : ObservableObject
     private readonly IFileDialogService _fileDialogService;
     private readonly IUserNotificationService _notificationService;
     private readonly StatusCenter _statusCenter;
+    private readonly IExcelImportService _excelImportService;
     private readonly TsplGenerator _tsplGenerator;
     private readonly LabelTemplateSerializer _serializer;
     private readonly Stack<string> _undoStack = new();
@@ -33,6 +37,7 @@ public partial class EditorViewModel : ObservableObject
     private IRelayCommand<TableCellInnerElementMoveRequest?>? _tableCellInnerElementMoveCommand;
     private IRelayCommand<TableCellResizeRequest?>? _tableCellResizeCommand;
     private bool _isApplyingSnapshot;
+    private bool _isLoadingProperties;
 
     public IAsyncRelayCommand<TableCellContextMenuRequest?> TableCellContextMenuCommand => _tableCellContextMenuCommand ??= new AsyncRelayCommand<TableCellContextMenuRequest?>(HandleTableCellContextMenuAsync);
 
@@ -45,7 +50,7 @@ public partial class EditorViewModel : ObservableObject
     /// <summary>
     /// 创建标签编辑器视图模型。
     /// </summary>
-    public EditorViewModel(ILabelTemplateStorageService storageService, IPrinterService printerService, IFileDialogService fileDialogService, IUserNotificationService notificationService, StatusCenter statusCenter, TsplGenerator tsplGenerator, LabelTemplateSerializer serializer)
+    public EditorViewModel(ILabelTemplateStorageService storageService, IPrinterService printerService, IFileDialogService fileDialogService, IUserNotificationService notificationService, StatusCenter statusCenter, TsplGenerator tsplGenerator, LabelTemplateSerializer serializer, IExcelImportService excelImportService)
     {
         _storageService = storageService;
         _printerService = printerService;
@@ -54,6 +59,7 @@ public partial class EditorViewModel : ObservableObject
         _statusCenter = statusCenter;
         _tsplGenerator = tsplGenerator;
         _serializer = serializer;
+        _excelImportService = excelImportService;
         ToolboxSections = BuildToolboxSections();
 
         ResetDocument(false);
@@ -68,6 +74,7 @@ public partial class EditorViewModel : ObservableObject
 
     [ObservableProperty]
     private string tsplPreview = string.Empty;
+
 
     [ObservableProperty]
     private string? currentFilePath;
@@ -109,7 +116,19 @@ public partial class EditorViewModel : ObservableObject
     private string selectedTextContent = string.Empty;
 
     [ObservableProperty]
+    private string selectedPlaceholder = string.Empty;
+
+    [ObservableProperty]
     private string selectedFont = "3";
+
+    [ObservableProperty]
+    private int selectedFontSizeDots;
+
+    [ObservableProperty]
+    private int selectedTextXScale = 1;
+
+    [ObservableProperty]
+    private int selectedTextYScale = 1;
 
     [ObservableProperty]
     private string selectedBarcodeContent = string.Empty;
@@ -160,6 +179,12 @@ public partial class EditorViewModel : ObservableObject
     private int selectedTableTotalHeight = 200;
 
     [ObservableProperty]
+    private TableLineStyle selectedTableBorderStyle = TableLineStyle.Dashed;
+
+    [ObservableProperty]
+    private TableLineStyle selectedTableGridStyle = TableLineStyle.Dashed;
+
+    [ObservableProperty]
     private int selectedBoxEndY = 120;
 
     [ObservableProperty]
@@ -170,6 +195,15 @@ public partial class EditorViewModel : ObservableObject
 
     [ObservableProperty]
     private int selectedLineHeight = 4;
+
+    [ObservableProperty]
+    private TableLineStyle selectedLineStyle = TableLineStyle.Solid;
+
+    [ObservableProperty]
+    private int selectedLineDashLength = 8;
+
+    [ObservableProperty]
+    private int selectedLineGapLength = 4;
 
     [ObservableProperty]
     private int selectedEraseWidth = 120;
@@ -225,6 +259,37 @@ public partial class EditorViewModel : ObservableObject
     {
         RefreshPreview();
     }
+    partial void OnElementXChanged(int value) { AutoApplyChanges(); }
+    partial void OnElementYChanged(int value) { AutoApplyChanges(); }
+    partial void OnElementRotationChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedTextContentChanged(string value) { AutoApplyChanges(); }
+    partial void OnSelectedFontChanged(string value) { AutoApplyChanges(); }
+    partial void OnSelectedFontSizeDotsChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedTextXScaleChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedTextYScaleChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedBarcodeContentChanged(string value) { AutoApplyChanges(); }
+    partial void OnSelectedBarcodeTypeChanged(BarcodeType value) { AutoApplyChanges(); }
+    partial void OnSelectedBarcodeHeightChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedBarcodeReadableChanged(bool value) { AutoApplyChanges(); }
+    partial void OnSelectedBarcodeNarrowChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedBarcodeWideChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedQrContentChanged(string value) { AutoApplyChanges(); }
+    partial void OnSelectedQrErrorCorrectionLevelChanged(string value) { AutoApplyChanges(); }
+    partial void OnSelectedQrCellWidthChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedBoxEndXChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedBoxEndYChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedBoxThicknessChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedLineWidthChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedLineHeightChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedLineStyleChanged(TableLineStyle value) { AutoApplyChanges(); }
+    partial void OnSelectedLineDashLengthChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedLineGapLengthChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedEraseWidthChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedEraseHeightChanged(int value) { AutoApplyChanges(); }
+    partial void OnSelectedPlaceholderChanged(string value) { AutoApplyChanges(); }
+    partial void OnSelectedTableBorderStyleChanged(TableLineStyle value) { AutoApplyChanges(); }
+    partial void OnSelectedTableGridStyleChanged(TableLineStyle value) { AutoApplyChanges(); }
+
 
     /// <summary>
     /// 当选中元素变化时同步右侧属性面板。
@@ -357,6 +422,45 @@ public partial class EditorViewModel : ObservableObject
         {
             _notificationService.ShowError($"另存模板失败: {ex.Message}");
             _statusCenter.SetActivityMessage("另存模板失败");
+        }
+    }
+
+    /// <summary>
+    /// 导出 TSPL 模板文件（含占位符 {{name}}），供外部软件按占位符替换内容。
+    /// </summary>
+    [RelayCommand]
+    private void ExportTsplTemplate()
+    {
+        if (!_fileDialogService.TrySaveFile("TSPL 模板|*.tspl|文本文件|*.txt", "template.tspl", out var path))
+        {
+            return;
+        }
+
+        try
+        {
+            var templateExporter = new TsplTemplateExporter();
+            var template = BuildTemplateSnapshot();
+            var tsplTemplate = templateExporter.ExportTemplate(template, new ExportOptions { Copies = 1, Density = Density });
+            System.IO.File.WriteAllText(path, tsplTemplate, System.Text.Encoding.GetEncoding("GB2312"));
+
+            var placeholders = templateExporter.GetPlaceholderList(template, new ExportOptions { Copies = 1, Density = Density });
+            if (placeholders.Count > 0)
+            {
+                var infoPath = System.IO.Path.ChangeExtension(path, ".placeholders.txt");
+                var lines = new List<string> { "# 占位符清单 (名称 | 类型 | 行号)", "# 外部软件替换时按行号定位或搜索 {{名称}} 替换为实际值", "" };
+                foreach (var p2 in placeholders)
+                {
+                    lines.Add($"{p2.Name} | {p2.ElementType} | Line {p2.LineNumber}");
+                }
+                System.IO.File.WriteAllLines(infoPath, lines);
+            }
+
+            _notificationService.ShowSuccess($"模板已导出: {System.IO.Path.GetFileName(path)}");
+            _statusCenter.SetActivityMessage($"TSPL 模板已导出，含 {placeholders.Count} 个占位符");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"导出失败: {ex.Message}");
         }
     }
 
@@ -533,6 +637,77 @@ public partial class EditorViewModel : ObservableObject
         LoadSelectedElementEditor(tableElement);
         EditorHint = "表格电子表格编辑已应用";
         _statusCenter.SetActivityMessage("表格电子表格编辑已更新");
+    }
+
+    /// <summary>
+    /// 从 Excel 文件导入数据，自动创建表格元素并填充行列内容。
+    /// </summary>
+    [RelayCommand]
+    private async Task ImportExcelToTableAsync()
+    {
+        if (!_fileDialogService.TryOpenFile("Excel 文件|*.xlsx|所有文件|*.*", out var path))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _excelImportService.ImportAsync(path);
+            if (result.TotalRows == 0)
+            {
+                _notificationService.ShowWarning("Excel 文件为空，未导入任何数据。");
+                return;
+            }
+
+            CaptureUndoSnapshot();
+
+            var dotsPerMm = 8;
+            var labelWidthDots = (int)(LabelWidth * dotsPerMm);
+            var labelHeightDots = (int)(LabelHeight * dotsPerMm);
+            var margin = 10;
+            var availableWidth = labelWidthDots - margin * 2;
+            var availableHeight = labelHeightDots - margin * 2;
+            var totalRows = result.TotalRows + 1;
+            var colWidth = Math.Max(60, availableWidth / result.TotalColumns);
+            var rowHeight = Math.Max(30, Math.Min(80, availableHeight / totalRows));
+            var tableElement = new TableElement
+            {
+                X = margin,
+                Y = margin,
+                Rows = totalRows,
+                Cols = result.TotalColumns,
+                RowHeight = rowHeight,
+                ColumnWidths = Enumerable.Repeat(colWidth, result.TotalColumns).ToList(),
+            };
+            tableElement.EnsureCellCount();
+
+            for (var col = 0; col < result.TotalColumns; col++)
+            {
+                var headerCell = tableElement.Cells[col];
+                headerCell.Content = result.Headers[col];
+                headerCell.ContentType = TableCellContentType.Text;
+            }
+
+            for (var row = 0; row < result.TotalRows; row++)
+            {
+                for (var col = 0; col < result.TotalColumns; col++)
+                {
+                    var cellIndex = (row + 1) * result.TotalColumns + col;
+                    if (cellIndex < tableElement.Cells.Count)
+                    {
+                        tableElement.Cells[cellIndex].Content = result.Rows[row][col];
+                        tableElement.Cells[cellIndex].ContentType = TableCellContentType.Text;
+                    }
+                }
+            }
+
+            AddElement(tableElement, $"已从 Excel 导入 {result.TotalRows} 行 {result.TotalColumns} 列");
+            _statusCenter.SetActivityMessage($"已从 Excel 导入 {result.TotalRows} 行 {result.TotalColumns} 列数据");
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Excel 导入失败: {ex.Message}");
+        }
     }
 
     [RelayCommand]
@@ -715,6 +890,47 @@ public partial class EditorViewModel : ObservableObject
         _statusCenter.SetActivityMessage("单元格内部元素位置已更新");
     }
 
+    [ObservableProperty]
+    private int multiSelectedCount;
+
+    /// <summary>
+    /// 处理多选元素整体移动后的位置更新。
+    /// </summary>
+    [RelayCommand]
+    private void MultiElementMoved(object? param)
+    {
+        if (param is not List<ElementMoveRequest> moves || moves.Count == 0)
+        {
+            return;
+        }
+
+        CaptureUndoSnapshot();
+        foreach (var move in moves)
+        {
+            var element = Elements.FirstOrDefault(e => e.Id == move.ElementId);
+            if (element is not null)
+            {
+                element.X = move.X;
+                element.Y = move.Y;
+            }
+        }
+
+        RefreshPreview();
+        _statusCenter.SetActivityMessage($"已移动 {moves.Count} 个元素");
+    }
+
+    /// <summary>
+    /// 多选元素 ID 集合变更时更新计数。
+    /// </summary>
+    public void UpdateMultiSelection(IReadOnlySet<string>? ids)
+    {
+        MultiSelectedCount = ids?.Count ?? 0;
+        if (MultiSelectedCount > 1)
+        {
+            EditorHint = $"已框选 {MultiSelectedCount} 个元素，可拖拽整体移动。";
+        }
+    }
+
     private void HandleTableCellResize(TableCellResizeRequest? request)
     {
         if (request is null)
@@ -811,7 +1027,11 @@ public partial class EditorViewModel : ObservableObject
         {
             case TextElement textElement:
                 textElement.Content = SelectedTextContent;
+                textElement.Placeholder = SelectedPlaceholder;
                 textElement.Font = SelectedFont;
+                textElement.FontSizeDots = SelectedFontSizeDots;
+                textElement.XScale = SelectedTextXScale;
+                textElement.YScale = SelectedTextYScale;
                 break;
             case BarcodeElement barcodeElement:
                 barcodeElement.Content = SelectedBarcodeContent;
@@ -835,6 +1055,9 @@ public partial class EditorViewModel : ObservableObject
             case LineElement lineElement:
                 lineElement.Width = SelectedLineWidth;
                 lineElement.Height = SelectedLineHeight;
+                lineElement.Style = SelectedLineStyle;
+                lineElement.DashLength = SelectedLineDashLength;
+                lineElement.GapLength = SelectedLineGapLength;
                 break;
             case EraseElement eraseElement:
                 eraseElement.Width = SelectedEraseWidth;
@@ -860,23 +1083,27 @@ public partial class EditorViewModel : ObservableObject
                     }
                 }
 
-                if (SelectedTableTotalWidth > 0 && tableElement.TotalWidth > 0)
+                var newTotalWidth = tableElement.TotalWidth;
+                if (SelectedTableTotalWidth > 0 && newTotalWidth > 0 && Math.Abs(SelectedTableTotalWidth - newTotalWidth) > 1)
                 {
-                    var widthScale = (double)SelectedTableTotalWidth / tableElement.TotalWidth;
+                    var widthScale = (double)SelectedTableTotalWidth / newTotalWidth;
                     for (var i = 0; i < tableElement.ColumnWidths.Count; i++)
                     {
                         tableElement.ColumnWidths[i] = Math.Max(20, (int)Math.Round(tableElement.ColumnWidths[i] * widthScale));
                     }
                 }
+                SelectedTableTotalWidth = tableElement.TotalWidth;
 
-                if (SelectedTableTotalHeight > 0 && tableElement.TotalHeight > 0)
+                var newTotalHeight = tableElement.TotalHeight;
+                if (SelectedTableTotalHeight > 0 && newTotalHeight > 0 && Math.Abs(SelectedTableTotalHeight - newTotalHeight) > 1)
                 {
-                    var heightScale = (double)SelectedTableTotalHeight / tableElement.TotalHeight;
+                    var heightScale = (double)SelectedTableTotalHeight / newTotalHeight;
                     for (var i = 0; i < tableElement.RowHeights.Count; i++)
                     {
                         tableElement.RowHeights[i] = Math.Max(20, (int)Math.Round(tableElement.RowHeights[i] * heightScale));
                     }
                 }
+                SelectedTableTotalHeight = tableElement.TotalHeight;
                 break;
         }
 
@@ -884,7 +1111,71 @@ public partial class EditorViewModel : ObservableObject
         EditorHint = "属性已应用并刷新预览";
         _statusCenter.SetActivityMessage("元素属性已更新");
     }
+    /// <summary>
+    /// 实时应用当前属性面板的值到选中元素（不记录 undo）。
+    /// </summary>
+    private void AutoApplyChanges()
+    {
+        if (SelectedElement is null || _isApplyingSnapshot || _isLoadingProperties)
+        {
+            return;
+        }
 
+        SelectedElement.X = ElementX;
+        SelectedElement.Y = ElementY;
+        SelectedElement.Rotation = ElementRotation;
+
+        switch (SelectedElement)
+        {
+            case TextElement textElement:
+                textElement.Content = SelectedTextContent;
+                textElement.Font = SelectedFont;
+                textElement.FontSizeDots = SelectedFontSizeDots;
+                textElement.XScale = SelectedTextXScale;
+                textElement.YScale = SelectedTextYScale;
+                break;
+            case BarcodeElement barcodeElement:
+                barcodeElement.Content = SelectedBarcodeContent;
+                barcodeElement.Placeholder = SelectedPlaceholder;
+                barcodeElement.CodeType = SelectedBarcodeType;
+                barcodeElement.Height = SelectedBarcodeHeight;
+                barcodeElement.Readable = SelectedBarcodeReadable;
+                barcodeElement.Narrow = SelectedBarcodeNarrow;
+                barcodeElement.Wide = SelectedBarcodeWide;
+                break;
+            case QrCodeElement qrCodeElement:
+                qrCodeElement.Content = SelectedQrContent;
+                qrCodeElement.Placeholder = SelectedPlaceholder;
+                qrCodeElement.ErrorCorrectionLevel = SelectedQrErrorCorrectionLevel;
+                qrCodeElement.CellWidth = SelectedQrCellWidth;
+                qrCodeElement.Mode = SelectedQrMode;
+                break;
+            case BoxElement boxElement:
+                var boxW = SelectedBoxEndX - boxElement.X;
+                var boxH = SelectedBoxEndY - boxElement.Y;
+                boxElement.EndX = ElementX + Math.Max(4, boxW);
+                boxElement.EndY = ElementY + Math.Max(4, boxH);
+                boxElement.Thickness = SelectedBoxThickness;
+                break;
+            case LineElement lineElement:
+                lineElement.Width = SelectedLineWidth;
+                lineElement.Height = SelectedLineHeight;
+                lineElement.Style = SelectedLineStyle;
+                lineElement.DashLength = SelectedLineDashLength;
+                lineElement.GapLength = SelectedLineGapLength;
+                break;
+            case EraseElement eraseElement:
+                eraseElement.Width = SelectedEraseWidth;
+                eraseElement.Height = SelectedEraseHeight;
+                break;
+            case TableElement tableElement:
+                tableElement.BorderStyle = SelectedTableBorderStyle;
+                tableElement.GridStyle = SelectedTableBorderStyle;
+                break;
+        }
+
+        RefreshPreview();
+    }
     /// <summary>
     /// 在画布上选中指定元素。
     /// </summary>
@@ -1207,6 +1498,7 @@ public partial class EditorViewModel : ObservableObject
     /// </summary>
     private void LoadSelectedElementEditor(LabelElement? element)
     {
+        _isLoadingProperties = true;
         if (element is null)
         {
             EditorHint = "请选择一个元素后再编辑属性。";
@@ -1221,10 +1513,15 @@ public partial class EditorViewModel : ObservableObject
         {
             case TextElement textElement:
                 SelectedTextContent = textElement.Content;
+                SelectedPlaceholder = textElement.Placeholder;
                 SelectedFont = textElement.Font;
+                SelectedFontSizeDots = textElement.FontSizeDots;
+                SelectedTextXScale = textElement.XScale;
+                SelectedTextYScale = textElement.YScale;
                 break;
             case BarcodeElement barcodeElement:
                 SelectedBarcodeContent = barcodeElement.Content;
+                SelectedPlaceholder = barcodeElement.Placeholder;
                 SelectedBarcodeType = barcodeElement.CodeType;
                 SelectedBarcodeHeight = barcodeElement.Height;
                 SelectedBarcodeReadable = barcodeElement.Readable;
@@ -1233,6 +1530,7 @@ public partial class EditorViewModel : ObservableObject
                 break;
             case QrCodeElement qrCodeElement:
                 SelectedQrContent = qrCodeElement.Content;
+                SelectedPlaceholder = qrCodeElement.Placeholder;
                 SelectedQrErrorCorrectionLevel = qrCodeElement.ErrorCorrectionLevel;
                 SelectedQrCellWidth = qrCodeElement.CellWidth;
                 SelectedQrMode = qrCodeElement.Mode;
@@ -1245,6 +1543,9 @@ public partial class EditorViewModel : ObservableObject
             case LineElement lineElement:
                 SelectedLineWidth = lineElement.Width;
                 SelectedLineHeight = lineElement.Height;
+                SelectedLineStyle = lineElement.Style;
+                SelectedLineDashLength = lineElement.DashLength;
+                SelectedLineGapLength = lineElement.GapLength;
                 break;
             case EraseElement eraseElement:
                 SelectedEraseWidth = eraseElement.Width;
@@ -1256,10 +1557,13 @@ public partial class EditorViewModel : ObservableObject
                 SelectedTableColumnWidthB = tableElement.ColumnWidths.ElementAtOrDefault(1);
                 SelectedTableTotalWidth = tableElement.TotalWidth;
                 SelectedTableTotalHeight = tableElement.TotalHeight;
+                SelectedTableBorderStyle = tableElement.BorderStyle;
+                SelectedTableGridStyle = tableElement.GridStyle;
                 break;
         }
 
         EditorHint = $"正在编辑 {element.GetType().Name}";
+            _isLoadingProperties = false;
     }
 
     /// <summary>

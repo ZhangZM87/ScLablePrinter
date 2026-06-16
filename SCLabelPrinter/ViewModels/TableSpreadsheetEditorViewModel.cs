@@ -58,6 +58,9 @@ public sealed partial class TableSpreadsheetEditorViewModel : ObservableObject
     private TableCellContentType selectedCellContentType = TableCellContentType.Text;
 
     [ObservableProperty]
+    private LabelTextAlignment selectedCellAlignment = LabelTextAlignment.Left;
+
+    [ObservableProperty]
     private string selectedCellHint = "请选择一个单元格开始编辑。";
 
     [ObservableProperty]
@@ -217,6 +220,7 @@ public sealed partial class TableSpreadsheetEditorViewModel : ObservableObject
 
         cell.ContentType = SelectedCellContentType;
         cell.Content = SelectedCellContent ?? string.Empty;
+        cell.Alignment = SelectedCellAlignment;
         Spreadsheet.Rows[SelectedRowIndex][SelectedColumnIndex] = GetCellDisplayValue(cell);
         LoadSelectedCellEditor();
     }
@@ -342,6 +346,7 @@ public sealed partial class TableSpreadsheetEditorViewModel : ObservableObject
         SelectedCellAddress = $"{GetSpreadsheetColumnName(SelectedColumnIndex)}{SelectedRowIndex + 1}";
         SelectedCellContentType = cell.ContentType;
         SelectedCellContent = cell.Content;
+        SelectedCellAlignment = cell.Alignment;
         SelectedCellEditable = cell.InnerElements.Count == 0;
         SelectedCellHint = cell.InnerElements.Count > 0
             ? $"当前单元格包含 {cell.InnerElements.Count} 个内部元素，请使用“编辑内部元素”进行精细编辑。"

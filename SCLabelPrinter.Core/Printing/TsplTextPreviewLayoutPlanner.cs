@@ -55,10 +55,10 @@ public sealed class TsplTextPreviewLayoutPlanner : ITsplTextPreviewLayoutPlanner
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(element);
 
-        var baseFontDots = MapTsplFontSize(element.Font);
+        var baseFontDots = element.FontSizeDots > 0 ? (double)element.FontSizeDots : MapTsplFontSize(element.Font);
         var horizontalScale = Math.Max(1, element.XScale);
         var verticalScale = Math.Max(1, element.YScale);
-        var fontSizeDots = baseFontDots * verticalScale;
+        var fontSizeDots = element.FontSizeDots > 0 ? baseFontDots : baseFontDots * verticalScale;
         var lineHeightDots = Math.Max(baseFontDots * verticalScale * LineHeightFactor, baseFontDots);
         var characterWidthDots = Math.Max(6.0, baseFontDots * horizontalScale * CharacterWidthFactor);
         var labelWidthDots = ConvertToDots(label.Width, label.Unit);

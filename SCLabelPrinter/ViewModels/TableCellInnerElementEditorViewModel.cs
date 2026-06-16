@@ -287,8 +287,6 @@ public sealed partial class TableCellInnerElementEditorViewModel : ObservableObj
                 qrCodeElement.Mode = SelectedQrMode;
                 break;
         }
-
-            RefreshSelectedInnerProperties(SelectedInnerElement);
     }
 
     public TableCell BuildTableCell()
