@@ -1742,7 +1742,7 @@ public sealed class LabelCanvas : FrameworkElement
     }
 
     /// <summary>
-    /// 绘制文本元素预览。
+    /// 绘制文本元素预览 — 所见即所得，不换行不裁剪，按 TSPL 实际尺寸渲染。
     /// </summary>
     private void DrawTextElement(DrawingContext drawingContext, TextElement element, double scale, Point origin)
     {
@@ -1751,34 +1751,51 @@ public sealed class LabelCanvas : FrameworkElement
             return;
         }
 
-        var layout = TextPreviewLayoutPlanner.Plan(Template.Label, element);
+        var baseHeight = element.FontSizeDots > 0 ? (double)element.FontSizeDots : MapTsplFontHeight(element.Font);
+        var yScale = Math.Max(1, element.YScale);
+        var xScale = Math.Max(1, element.XScale);
+        var fontSize = Math.Max(6, baseHeight * yScale * scale);
         var anchor = new Point(origin.X + element.X * scale, origin.Y + element.Y * scale);
-        var fontSize = Math.Max(8, layout.FontSizeDots * scale);
-        var maxWidth = Math.Max(1, layout.MaxWidthDots * scale - 2);
-        var maxHeight = Math.Max(fontSize * 1.1, layout.MaxHeightDots * scale - 2);
         var typeface = new Typeface("Microsoft YaHei UI");
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var content = string.IsNullOrEmpty(element.Content) ? " " : element.Content;
+
         var formattedText = new FormattedText(
-            string.IsNullOrEmpty(element.Content) ? " " : element.Content,
+            content,
             CultureInfo.CurrentUICulture,
             FlowDirection.LeftToRight,
             typeface,
             fontSize,
             _foregroundBrush,
-            pixelsPerDip)
-        {
-            MaxTextWidth = maxWidth,
-            MaxTextHeight = maxHeight,
-            Trimming = TextTrimming.CharacterEllipsis,
-        };
-        var clipRect = new Rect(anchor.X, anchor.Y, maxWidth, maxHeight);
+            pixelsPerDip);
 
         DrawWithRotation(drawingContext, element.Rotation, anchor, () =>
         {
-            drawingContext.PushClip(new RectangleGeometry(clipRect, 4, 4));
-            drawingContext.DrawText(formattedText, anchor);
-            drawingContext.Pop();
+            if (xScale > 1)
+            {
+                var transform = new ScaleTransform(xScale, 1.0, anchor.X, anchor.Y);
+                drawingContext.PushTransform(transform);
+                drawingContext.DrawText(formattedText, anchor);
+                drawingContext.Pop();
+            }
+            else
+            {
+                drawingContext.DrawText(formattedText, anchor);
+            }
         });
+    }
+
+    private static double MapTsplFontHeight(string font)
+    {
+        return font switch
+        {
+            "1" => 12,
+            "2" => 20,
+            "3" => 24,
+            "4" => 32,
+            "5" => 48,
+            _ => 20,
+        };
     }
 
     /// <summary>
@@ -2396,15 +2413,17 @@ public sealed class LabelCanvas : FrameworkElement
     /// </summary>
     private static double EstimateBarcodeWidth(BarcodeElement element)
     {
-        var baseWidth = element.CodeType switch
+        var contentLength = Math.Max(1, element.Content.Length);
+        return element.CodeType switch
         {
-            BarcodeType.Code39 => element.Content.Length * (element.Narrow + element.Wide) * 8,
-            BarcodeType.Code128 => element.Content.Length * (element.Narrow + element.Wide) * 6,
-            BarcodeType.Ean13 => 180,
-            _ => 180,
+            // Code39: start(13) + data*13 + stop(13) modules, each module = narrow
+            BarcodeType.Code39 => (26 + contentLength * 13) * element.Narrow,
+            // Code128: start(11) + data*11 + checksum(11) + stop(13) modules
+            BarcodeType.Code128 => (35 + contentLength * 11) * element.Narrow,
+            // EAN13 固定宽度: 95 modules, narrow=1 时约 95 dots
+            BarcodeType.Ean13 => 95 * element.Narrow,
+            _ => (35 + contentLength * 11) * element.Narrow,
         };
-
-        return Math.Max(120, baseWidth);
     }
 
 
