@@ -89,6 +89,16 @@
                             Command="{Binding QueryModelCommand}"
                             Content="查询型号"
                             Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            Margin="0,12,0,0"
+                            Command="{Binding CalibrateGapCommand}"
+                            Content="校正纸张"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <TextBlock
+                            Margin="0,8,0,0"
+                            Foreground="Green"
+                            Text="{Binding CalibrationResult}"
+                            TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </Border>

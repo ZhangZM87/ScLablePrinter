@@ -220,4 +220,37 @@ public partial class PrinterViewModel : ObservableObject
             _statusCenter.SetActivityMessage("自动轮询失败，请重新连接打印机");
         }
     }
+
+    [ObservableProperty]
+    private string calibrationResult = string.Empty;
+
+    [RelayCommand]
+    private async Task CalibrateGapAsync()
+    {
+        if (!IsConnected)
+        {
+            _statusCenter.SetActivityMessage("请先连接打印机再执行校正");
+            return;
+        }
+
+        IsBusy = true;
+        CalibrationResult = "正在校正...";
+        try
+        {
+            var command = string.Join(System.Environment.NewLine, "SIZE 60 mm,40 mm", "GAP 2 mm", "GAPDETECT", "");
+            await _printerService.SendCommandAsync(command);
+            CalibrationResult = "校正完成 - 纸张位置已对齐";
+            _statusCenter.SetActivityMessage("纸张校正成功");
+        }
+        catch (Exception ex)
+        {
+            CalibrationResult = $"校正失败: {ex.Message}";
+            _notificationService.ShowError($"纸张校正失败: {ex.Message}");
+            _statusCenter.SetActivityMessage("纸张校正失败");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 }
