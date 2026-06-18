@@ -61,6 +61,7 @@ public sealed class TsplExporter : ILabelExporter
         builder.AppendLine($"SIZE {TsplValueFormatter.FormatNumber(template.Label.Width)} {TsplValueFormatter.MapUnit(template.Label.Unit)},{TsplValueFormatter.FormatNumber(template.Label.Height)} {TsplValueFormatter.MapUnit(template.Label.Unit)}");
         builder.AppendLine($"GAP {TsplValueFormatter.FormatNumber(template.Label.Gap)} {TsplValueFormatter.MapUnit(template.Label.Unit)}");
         builder.AppendLine($"DENSITY {options.Density}");
+        builder.AppendLine("SET TEAR ON");
         builder.AppendLine("CLS");
 
         foreach (var element in template.Elements)

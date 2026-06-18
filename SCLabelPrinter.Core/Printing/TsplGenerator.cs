@@ -53,6 +53,7 @@ public sealed class TsplGenerator
             $"SIZE {TsplValueFormatter.FormatNumber(template.Label.Width)} {TsplValueFormatter.MapUnit(template.Label.Unit)},{TsplValueFormatter.FormatNumber(template.Label.Height)} {TsplValueFormatter.MapUnit(template.Label.Unit)}",
             $"GAP {TsplValueFormatter.FormatNumber(template.Label.Gap)} {TsplValueFormatter.MapUnit(template.Label.Unit)}",
             $"DENSITY {template.Label.Density}",
+            "SET TEAR ON",
             "CLS",
         };
 
