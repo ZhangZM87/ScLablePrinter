@@ -1751,51 +1751,78 @@ public sealed class LabelCanvas : FrameworkElement
             return;
         }
 
-        var baseHeight = element.FontSizeDots > 0 ? (double)element.FontSizeDots : MapTsplFontHeight(element.Font);
-        var yScale = Math.Max(1, element.YScale);
-        var xScale = Math.Max(1, element.XScale);
-        var fontSize = Math.Max(6, baseHeight * yScale * scale);
+        var (charWidth, charHeight) = GetTsplFontDotSize(element.Font);
+        var xMul = Math.Max(1, element.XScale);
+        var yMul = Math.Max(1, element.YScale);
+        var dotW = charWidth * xMul * scale;
+        var dotH = charHeight * yMul * scale;
         var anchor = new Point(origin.X + element.X * scale, origin.Y + element.Y * scale);
-        var typeface = new Typeface("Microsoft YaHei UI");
-        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var content = string.IsNullOrEmpty(element.Content) ? " " : element.Content;
+        var isChinese = IsCjkFont(element.Font);
+        var typeface = new Typeface(isChinese ? "SimSun" : "Consolas");
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var fontSize = dotH * 0.85;
 
         var formattedText = new FormattedText(
             content,
             CultureInfo.CurrentUICulture,
             FlowDirection.LeftToRight,
             typeface,
-            fontSize,
+            Math.Max(6, fontSize),
             _foregroundBrush,
             pixelsPerDip);
 
+        var expectedWidth = content.Length * dotW;
+        if (isChinese)
+        {
+            var cjkCount = 0;
+            var asciiCount = 0;
+            foreach (var ch in content)
+            {
+                if (ch > 127) cjkCount++; else asciiCount++;
+            }
+            expectedWidth = (cjkCount * dotW + asciiCount * dotW * 0.5);
+        }
+
         DrawWithRotation(drawingContext, element.Rotation, anchor, () =>
         {
-            if (xScale > 1)
-            {
-                var transform = new ScaleTransform(xScale, 1.0, anchor.X, anchor.Y);
-                drawingContext.PushTransform(transform);
-                drawingContext.DrawText(formattedText, anchor);
-                drawingContext.Pop();
-            }
-            else
-            {
-                drawingContext.DrawText(formattedText, anchor);
-            }
+            var actualWidth = formattedText.WidthIncludingTrailingWhitespace;
+            var scaleX = actualWidth > 0.1 ? expectedWidth / actualWidth : 1.0;
+            var scaleY = formattedText.Height > 0.1 ? dotH / formattedText.Height : 1.0;
+            var transform = new ScaleTransform(scaleX, scaleY, anchor.X, anchor.Y);
+            drawingContext.PushTransform(transform);
+            drawingContext.DrawText(formattedText, anchor);
+            drawingContext.Pop();
         });
     }
 
-    private static double MapTsplFontHeight(string font)
+    private static (double Width, double Height) GetTsplFontDotSize(string font)
     {
         return font switch
         {
-            "1" => 12,
-            "2" => 20,
-            "3" => 24,
-            "4" => 32,
-            "5" => 48,
-            _ => 20,
+            "1" => (8, 12),
+            "2" => (12, 20),
+            "3" => (16, 24),
+            "4" => (24, 32),
+            "5" => (32, 48),
+            "6" => (14, 19),
+            "7" => (21, 27),
+            "8" => (14, 25),
+            "9" => (9, 17),
+            "10" => (12, 24),
+            "TSS16.BF2" => (16, 16),
+            "TSS20.BF2" => (20, 20),
+            "TST24.BF2" => (24, 24),
+            "TSS24.BF2" => (24, 24),
+            "K" => (24, 24),
+            "TSS32.BF2" => (32, 32),
+            _ => (12, 20),
         };
+    }
+
+    private static bool IsCjkFont(string font)
+    {
+        return font is "TSS16.BF2" or "TSS20.BF2" or "TST24.BF2" or "TSS24.BF2" or "K" or "TSS32.BF2";
     }
 
     /// <summary>
